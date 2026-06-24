@@ -1,0 +1,126 @@
+@font-face {
+  font-family: 'CelebMF';
+  src: url('../font/Masterfont - Celeb MF Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'CelebMFLight';
+  src: url('../font/Masterfont - Celeb MF Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* System Fonts - SF Pro */
+  --font-system:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+
+  /* --- SEMANTIC TOKEN SYSTEM (DEFAULT: DARK) --- */
+  /* Reference Image Matching */
+  --bg-sidebar: #18181b;
+  /* User Spec: Side Panel */
+  --bg-main: #1e1e21;
+  /* User Spec: Main BG */
+  --bg-card: #242429;
+  /* User Spec: Detectable Container */
+
+  --bg-toggle-switch: #303033;
+  /* User Spec: Toggle Button */
+  --bg-item-surface: #27272a;
+  /* User Spec: Icons & Input Backgrounds */
+  --bg-item-active: #2c2c2c;
+  /* Selected state */
+
+  --bg-primary: #000000;
+  /* Fallback */
+  --bg-secondary: #050505;
+  /* Fallback */
+  --bg-elevated: #151515;
+  /* Fallback */
+  --bg-input: #1a1a1a;
+  /* Fallback */
+
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-tertiary: #606060;
+
+  --border-subtle: transparent;
+  --border-muted: #333333;
+
+  --accent-primary: #3b82f6;
+  --accent-muted: rgba(59, 130, 246, 0.15);
+
+  --bg-component: #262626;
+  /* Specific legacy value */
+
+  --overlay-bg: rgba(30, 30, 30, 0.65);
+
+  --overlay-opacity: 0.65;
+  --overlay-border: rgba(255, 255, 255, 0.12);
+  --overlay-border-soft: rgba(255, 255, 255, 0.1);
+  --overlay-panel-bg: rgb(
+    30 30 30 / calc(0.05 + (var(--overlay-opacity) * 0.55))
+  );
+  --overlay-pill-bg: rgb(
+    30 30 30 / calc(0.04 + (var(--overlay-opacity) * 0.48))
+  );
+  --overlay-transcript-bg: rgb(
+    30 30 30 / calc(0.02 + (var(--overlay-opacity) * 0.24))
+  );
+  --overlay-chip-bg: rgba(255, 255, 255, 0.035);
+  --overlay-chip-hover-bg: rgba(255, 255, 255, 0.11);
+  --overlay-input-bg: rgba(255, 255, 255, 0.05);
+  --overlay-input-hover-bg: rgba(255, 255, 255, 0.12);
+  --overlay-input-focus-bg: rgba(255, 255, 255, 0.16);
+  --overlay-control-bg: rgba(255, 255, 255, 0.05);
+  --overlay-control-hover-bg: rgba(255, 255, 255, 0.12);
+  --overlay-code-bg: rgba(255, 255, 255, 0.03);
+  --overlay-code-border: rgba(255, 255, 255, 0.08);
+  --overlay-code-header-bg: rgba(255, 255, 255, 0.05);
+  --overlay-inline-code-bg: rgba(255, 255, 255, 0.07);
+  --overlay-icon-bg: rgba(255, 255, 255, 0.05);
+  --overlay-icon-hover-bg: rgba(255, 255, 255, 0.12);
+  --overlay-panel-shadow: rgb(
+    0 0 0 / calc(0.05 + (var(--overlay-opacity) * 0.18))
+  );
+  --overlay-pill-shadow: rgb(
+    0 0 0 / calc(0.03 + (var(--overlay-opacity) * 0.12))
+  );
+  --overlay-text-primary: rgba(255, 255, 255, 0.985);
+  --overlay-text-secondary: rgba(255, 255, 255, 0.9);
+  --overlay-text-muted: rgba(255, 255, 255, 0.7);
+  --overlay-text-placeholder: rgba(255, 255, 255, 0.58);
+  --overlay-text-strong: #ffffff;
+  --overlay-shell-blur: calc(2px + (var(--overlay-opacity) * 18px));
+  --overlay-pill-blur: calc(1px + (var(--overlay-opacity) * 12px));
+  --overlay-transcript-blur: calc(var(--overlay-opacity) * 6px);
+
+  /* Primary Action Button Defaults (Dark) */
+  --btn-primary-bg: #2563eb; /* blue-600 */
+  --btn-primary-hover: #3b82f6; /* blue-500 */
+  --btn-primary-disabled-bg: rgba(30, 58, 138, 0.3); /* blue-900/30 */
+  --btn-primary-disabled-border: rgba(30, 64, 175, 0.3); /* blue-800/30 */
+  --btn-primary-disabled-text: rgba(96, 165, 250, 0.4); /* blue-400/40 */
+  --btn-primary-shadow-color: rgba(30, 58, 138, 0.3); /* blue-900/30 */
+
+  /* Overlay Semantic Status/Alert Tokens (Dark) */
+  --overlay-status-active: #34d399;
+  --overlay-status-active-glow: rgba(52, 211, 153, 0.5);
+  --overlay-status-inactive: #404040;
+  --overlay-warning-bg: rgba(245, 158, 11, 0.08);
+  --overlay-warning-border: rgba(245, 158, 11, 0.18);
+  --overlay-warning-text: #fbbf24;
+  --overlay-warning-text-dim: rgba(251, 191, 35, 0.6);
+  --overlay-error-bg: rgba(239, 68, 68, 0.08);
+  --overlay-error-border: rgba(239, 68, 68, 0.18);
+  --overlay-error-text: #f87171;
+  --overlay-success-text: #34d399;
+  --overlay-accent-bg: #2563eb;
+  --overlay-accent-hover: #3b82f6;
+  --overlay-accent-glow: rgba(37, 99, 235, 0.25);
+}

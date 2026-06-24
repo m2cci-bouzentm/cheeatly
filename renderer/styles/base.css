@@ -1,0 +1,132 @@
+/* ─── Light mode elevation system ────────────────────────────────────────
+   Top product designers (Linear, Vercel, Stripe) separate surfaces with
+   SHADOW — not borders. This creates depth without visual clutter.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Level 1 — Cards sitting on the canvas */
+
+/* Level 2 — Modals, panels, settings wrapper */
+
+/* Level 3 — Dropdowns (override shadow-2xl in light mode) */
+
+/* Sidebar border — very subtle rule separating white sidebar from gray canvas */
+
+/* App sizing baseline (required for h-full / flex scroll areas) */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  /* Transparent background to let vibrancy show through */
+  background: transparent;
+  /* System font */
+  font-family: var(--font-system);
+  /* Smoother fonts */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  /* cursor: default; -> Removed to let app dictate cursor */
+}
+
+/* Scrollbar Styling - Minimal macOS Hidden style */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+
+/* Interaction Utilities - Reusable */
+.interaction-base {
+  transition-property:
+    transform, opacity, background-color, border-color, color;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+  backface-visibility: hidden;
+}
+
+.interaction-hover:hover {
+  transform: translateY(-0.5px);
+}
+
+.interaction-press:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.draggable-area {
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 50;
+  cursor: grab !important;
+}
+
+.draggable-area:active {
+  cursor: grabbing !important;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+  cursor: grab !important;
+}
+
+.drag-region:active {
+  cursor: grabbing !important;
+}
+
+/* Make sure buttons and interactive elements are not draggable */
+button,
+input,
+select,
+textarea,
+.no-drag,
+[role='button'],
+a {
+  -webkit-app-region: no-drag;
+  cursor: default !important;
+}
+
+/* ─── Global cursor lock ─────────────────────────────────────────────────
+   This is a desktop Electron app — the only cursor we ever show is the
+   default arrow. No I-beam on inputs, no pointer on buttons, no resize
+   handles, no text-select carets. This rule overrides:
+     - Browser UA defaults (input → text, button → pointer, link → pointer)
+     - Tailwind `cursor-*` utility classes used throughout the codebase
+   NOTE: We've relaxed this to allow `cursor-grab` and `cursor-grabbing`
+   on draggable areas via the rules above. */
+*,
+*::before,
+*::after,
+*:hover,
+*:focus,
+*:active,
+*:focus-within,
+*:focus-visible,
+input,
+textarea,
+select,
+button,
+a,
+[role='button'],
+[contenteditable],
+[contenteditable='true'] {
+  cursor: default;
+}
+
+/* Restore keyboard focus rings that Tailwind preflight removes */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ── Windows / Linux window chrome – rounded corners ──────────────────────────
+   Using positive selectors (not :not()) avoids a brief border-radius flash on
+   macOS during cold-start, before the data-platform attribute is set.
+   ─────────────────────────────────────────────────────────────────────────── */
+html[data-platform='win32'] body,
+html[data-platform='linux'] body {
+  border-radius: 8px;
+  overflow: hidden;
+}

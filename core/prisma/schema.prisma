@@ -1,0 +1,56 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin-arm64"]
+  // Root output keeps @prisma/client resolvable from dist-main and tests.
+  output        = "../../node_modules/.prisma/client"
+}
+
+model Meeting {
+  id         String   @id @default(uuid())
+  title      String?
+  transcript String?
+  summary    String?
+  chunks     Chunk[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Chunk {
+  id        Int     @id @default(autoincrement())
+  meetingId String
+  content   String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Context {
+  id          String   @id @default(uuid())
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model File {
+  id             String   @id @default(uuid())
+  filename       String
+  storagePath    String
+  attachableType String
+  attachableId   String
+  createdAt      DateTime @default(now())
+
+  @@index([attachableType, attachableId])
+}
+
+model Skill {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String   @default("")
+  content     String
+  enabled     Boolean  @default(true)
+  bundled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

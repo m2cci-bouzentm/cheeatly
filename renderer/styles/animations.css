@@ -1,0 +1,5 @@
+/* Force instant transitions globally during previews */
+.disable-transitions,
+.disable-transitions * {
+  transition: none;
+}
