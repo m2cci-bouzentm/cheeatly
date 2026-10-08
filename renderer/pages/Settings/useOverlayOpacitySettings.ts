@@ -30,7 +30,7 @@ export const useOverlayOpacitySettings = (isOpen: boolean) => {
     setPreviewOverlayOpacity(val);
     latestOpacityRef.current = val;
 
-    window.electronAPI.setOverlayOpacity(val);
+    window.desktopAPI.setOverlayOpacity(val);
   };
 
   useEffect(() => {

@@ -23,7 +23,7 @@ const ModelSelectorWindow = () => {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const config = await window.electronAPI.getCurrentLlmConfig();
+        const config = await window.desktopAPI.getCurrentLlmConfig();
         if (config?.model) {
           setCurrentModel(config.model);
           localStorage.setItem('cached-current-model', config.model);
@@ -36,7 +36,7 @@ const ModelSelectorWindow = () => {
     loadConfig();
     window.addEventListener('focus', loadConfig);
 
-    const unsubscribe = window.electronAPI.onModelChanged(
+    const unsubscribe = window.desktopAPI.onModelChanged(
       (modelId: string) => {
         setCurrentModel(modelId);
       }
@@ -50,7 +50,7 @@ const ModelSelectorWindow = () => {
   const handleSelectFn = (modelId: string) => {
     setCurrentModel(modelId);
     localStorage.setItem('cached-current-model', modelId);
-    window.electronAPI
+    window.desktopAPI
       .setModel(modelId)
       .catch((err: any) => console.error('Failed to set model:', err));
   };

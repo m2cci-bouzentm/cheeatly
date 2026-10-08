@@ -11,14 +11,14 @@ const SettingsPopup = () => {
 
   // Fetch initial undetectable state from main process (source of truth)
   useEffect(() => {
-    window.electronAPI.getUndetectable().then((state: boolean) => {
+    window.desktopAPI.getUndetectable().then((state: boolean) => {
       setIsUndetectable(state);
     });
   }, []);
 
   // One-way listener: receive state changes from main process, never echo back
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onUndetectableChanged(
+    const unsubscribe = window.desktopAPI.onUndetectableChanged(
       (newState: boolean) => {
         setIsUndetectable(newState);
         localStorage.setItem('cheatly_undetectable', String(newState));
@@ -52,7 +52,7 @@ const SettingsPopup = () => {
       for (const entry of entries) {
         const rect = entry.target.getBoundingClientRect();
         try {
-          window.electronAPI.updateContentDimensions({
+          window.desktopAPI.updateContentDimensions({
             width: Math.ceil(rect.width),
             height: Math.ceil(rect.height),
           });
@@ -121,7 +121,7 @@ const SettingsPopup = () => {
                 const newState = !isUndetectable;
                 setIsUndetectable(newState);
                 localStorage.setItem('cheatly_undetectable', String(newState));
-                window.electronAPI.setUndetectable(newState);
+                window.desktopAPI.setUndetectable(newState);
               }}
             />
           </div>

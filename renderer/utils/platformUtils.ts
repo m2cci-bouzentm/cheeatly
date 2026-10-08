@@ -6,7 +6,7 @@ function normalizePlatform(p: string): string {
 }
 
 const platform = normalizePlatform(
-  window.electronAPI.platform
+  window.desktopAPI.platform
 );
 
 export const isMac = platform === 'darwin';

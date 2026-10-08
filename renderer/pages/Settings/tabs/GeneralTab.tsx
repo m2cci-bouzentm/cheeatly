@@ -97,7 +97,7 @@ export const GeneralTab: React.FC = () => {
             checked={isUndetectable}
             onCheckedChange={(newState) => {
               setIsUndetectable(newState);
-              window.electronAPI.setUndetectable(newState);
+              window.desktopAPI.setUndetectable(newState);
               analytics.trackModeSelected(
                 newState ? 'undetectable' : 'overlay'
               );
@@ -144,7 +144,7 @@ export const GeneralTab: React.FC = () => {
                   checked={openOnLogin}
                   onCheckedChange={(newState) => {
                     setOpenOnLogin(newState);
-                    window.electronAPI.setOpenAtLogin(newState);
+                    window.desktopAPI.setOpenAtLogin(newState);
                   }}
                 />
               </div>
@@ -175,7 +175,7 @@ export const GeneralTab: React.FC = () => {
                   checked={verboseLogging}
                   onCheckedChange={(newState) => {
                     setVerboseLogging(newState);
-                    window.electronAPI.setVerboseLogging(newState);
+                    window.desktopAPI.setVerboseLogging(newState);
                     if (newState) {
                       setShowVerboseToast(true);
                     }
@@ -210,7 +210,7 @@ export const GeneralTab: React.FC = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => window.electronAPI.openLogFile()}
+                        onClick={() => window.desktopAPI.openLogFile()}
                         className="shrink-0 text-[11px] font-medium text-amber-400 hover:text-amber-300 px-1.5 py-0.5 h-auto rounded-md bg-amber-500/15 hover:bg-amber-500/25"
                       >
                         Open
@@ -376,7 +376,7 @@ export const GeneralTab: React.FC = () => {
                 setDisguiseMode(
                   option.id as 'terminal' | 'settings' | 'activity' | 'none'
                 );
-                window.electronAPI.setDisguise(
+                window.desktopAPI.setDisguise(
                   option.id as 'terminal' | 'settings' | 'activity' | 'none'
                 );
                 analytics.trackModeSelected(`disguise_${option.id}`);

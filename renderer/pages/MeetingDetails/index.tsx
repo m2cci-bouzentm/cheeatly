@@ -133,7 +133,7 @@ ${meeting.detailedSummary.keyPoints?.map((item) => `- ${item}`).join('\n') || 'N
 
   const handleTitleSave = async (newTitle: string) => {
     setMeeting((prev) => ({ ...prev, title: newTitle }));
-    await window.electronAPI.updateMeetingTitle(meeting.id, newTitle);
+    await window.desktopAPI.updateMeetingTitle(meeting.id, newTitle);
   };
 
   const handleActionItemSave = async (index: number, newVal: string) => {
@@ -148,7 +148,7 @@ ${meeting.detailedSummary.keyPoints?.map((item) => `- ${item}`).join('\n') || 'N
       },
     }));
 
-    await window.electronAPI.updateMeetingSummary(meeting.id, {
+    await window.desktopAPI.updateMeetingSummary(meeting.id, {
       actionItems: newItems,
     });
   };
@@ -165,7 +165,7 @@ ${meeting.detailedSummary.keyPoints?.map((item) => `- ${item}`).join('\n') || 'N
       },
     }));
 
-    await window.electronAPI.updateMeetingSummary(meeting.id, {
+    await window.desktopAPI.updateMeetingSummary(meeting.id, {
       keyPoints: newItems,
     });
   };
@@ -340,7 +340,7 @@ ${meeting.detailedSummary.keyPoints?.map((item) => `- ${item}`).join('\n') || 'N
                                 actionItemsTitle: val,
                               },
                             }));
-                            window.electronAPI.updateMeetingSummary(
+                            window.desktopAPI.updateMeetingSummary(
                               meeting.id,
                               { actionItemsTitle: val }
                             );
@@ -408,7 +408,7 @@ ${meeting.detailedSummary.keyPoints?.map((item) => `- ${item}`).join('\n') || 'N
                                 keyPointsTitle: val,
                               },
                             }));
-                            window.electronAPI.updateMeetingSummary(
+                            window.desktopAPI.updateMeetingSummary(
                               meeting.id,
                               { keyPointsTitle: val }
                             );

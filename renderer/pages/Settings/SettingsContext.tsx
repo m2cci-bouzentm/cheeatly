@@ -45,13 +45,13 @@ export const SettingsOverlayStateProvider: React.FC<
   useEffect(() => {
     if (isOpen) {
       // Fetch true initial state from main process
-      window.electronAPI.getUndetectable()
+      window.desktopAPI.getUndetectable()
         .then(setIsUndetectable)
         .catch(() => {});
-      window.electronAPI.getDisguise()
+      window.desktopAPI.getDisguise()
         .then(setDisguiseMode)
         .catch(() => {});
-      window.electronAPI.getVerboseLogging()
+      window.desktopAPI.getVerboseLogging()
         .then(setVerboseLogging)
         .catch(() => {});
     }
@@ -70,7 +70,7 @@ export const SettingsOverlayStateProvider: React.FC<
   }, [showVerboseToast]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onUndetectableChanged(
+    const unsubscribe = window.desktopAPI.onUndetectableChanged(
       (newState: boolean) => {
         setIsUndetectable(newState);
       }
@@ -79,7 +79,7 @@ export const SettingsOverlayStateProvider: React.FC<
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onDisguiseChanged((newMode: any) => {
+    const unsubscribe = window.desktopAPI.onDisguiseChanged((newMode: any) => {
       setDisguiseMode(newMode);
     });
     return () => unsubscribe();

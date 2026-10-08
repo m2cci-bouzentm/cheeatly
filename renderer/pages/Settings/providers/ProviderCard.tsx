@@ -137,7 +137,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
     setSelectedModel(modelId);
     setIsDropdownOpen(false);
     try {
-      await window.electronAPI.setProviderPreferredModel(providerId, modelId);
+      await window.desktopAPI.setProviderPreferredModel(providerId, modelId);
       if (onPreferredModelChange) onPreferredModelChange(modelId);
     } catch (e) {
       console.error('Failed to save preferred model:', e);
@@ -172,7 +172,7 @@ export const ProviderCard: React.FC<ProviderCardProps> = ({
         <Button
           variant="ghost"
           onClick={() => {
-            window.electronAPI.openExternal(keyUrl);
+            window.desktopAPI.openExternal(keyUrl);
           }}
           className="h-auto p-0 text-xs text-text-tertiary hover:text-text-primary flex items-center gap-1"
           title={`Get ${providerName} API Key`}

@@ -135,7 +135,7 @@ export const useMeetingState = ({
     const cleanups: (() => void)[] = [];
 
     cleanups.push(
-      window.electronAPI.onSystemAudioPermissionDenied((message: string) => {
+      window.desktopAPI.onSystemAudioPermissionDenied((message: string) => {
         setSystemAudioWarning({
           kind: 'screen-recording-permission',
           message,
@@ -146,7 +146,7 @@ export const useMeetingState = ({
     );
 
     cleanups.push(
-      window.electronAPI.onAudioInputAutoSwitched((payload) => {
+      window.desktopAPI.onAudioInputAutoSwitched((payload) => {
         const msg =
           payload.message ??
           (payload.reason === 'bluetooth-hfp-avoided'
@@ -162,7 +162,7 @@ export const useMeetingState = ({
     );
 
     cleanups.push(
-      window.electronAPI.onMeetingStateChanged(({ isActive }) => {
+      window.desktopAPI.onMeetingStateChanged(({ isActive }) => {
         ((window as any).__cheatlyDialogueDebug ??= {
           updates: 0,
           resets: [],
@@ -175,14 +175,14 @@ export const useMeetingState = ({
     );
 
     cleanups.push(
-      window.electronAPI.onDialogueDrained((turns) => {
+      window.desktopAPI.onDialogueDrained((turns) => {
         setDialogueTurns(turns);
         setLivePartials({ Me: null, Them: null });
       })
     );
 
     cleanups.push(
-      window.electronAPI.onSessionReset(() => {
+      window.desktopAPI.onSessionReset(() => {
         console.log('[AssistantOverlay] Resetting session state...');
         onSessionReset();
         stopChat();
@@ -202,7 +202,7 @@ export const useMeetingState = ({
     );
 
     cleanups.push(
-      window.electronAPI.onSttStatusChanged((data) => {
+      window.desktopAPI.onSttStatusChanged((data) => {
         if (data.channel === 'user') {
           updateUserSttStatus(data);
           return;
@@ -213,13 +213,13 @@ export const useMeetingState = ({
       })
     );
 
-    window.electronAPI
+    window.desktopAPI
       .getNativeAudioStatus()
       .then((status) => setIsConnected(status.connected))
       .catch(() => setIsConnected(false));
 
     cleanups.push(
-      window.electronAPI.onAudioCaptureActive((data) => {
+      window.desktopAPI.onAudioCaptureActive((data) => {
         if (data.channel === 'mic') {
           setMicCaptureActive(data.active);
           return;
@@ -229,7 +229,7 @@ export const useMeetingState = ({
     );
 
     cleanups.push(
-      window.electronAPI.onNativeAudioTranscript((transcript) => {
+      window.desktopAPI.onNativeAudioTranscript((transcript) => {
         if (
           transcript.speaker !== 'interviewer' &&
           transcript.speaker !== 'user'
@@ -267,14 +267,14 @@ export const useMeetingState = ({
   // STT provider config check
   useEffect(() => {
     let mounted = true;
-    window.electronAPI
+    window.desktopAPI
       .getSttProvider()
       .then((provider: string) => {
         if (mounted) setSttNotConfigured(provider === 'none');
       })
       .catch(() => {});
 
-    const unsub = window.electronAPI.onSttConfigChanged(
+    const unsub = window.desktopAPI.onSttConfigChanged(
       (data: { configured: boolean; provider: string }) => {
         if (mounted) setSttNotConfigured(!data.configured);
       }

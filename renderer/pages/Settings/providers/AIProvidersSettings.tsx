@@ -19,9 +19,9 @@ export const AIProvidersSettings: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const creds = await window.electronAPI.getStoredCredentials();
+        const creds = await window.desktopAPI.getStoredCredentials();
         setHasKey(!!(creds as any)?.hasOpenRouterKey);
-        const config = await window.electronAPI.getDefaultModel();
+        const config = await window.desktopAPI.getDefaultModel();
         if (config?.model) setDefaultModel(config.model);
       } catch {}
     };
@@ -32,7 +32,7 @@ export const AIProvidersSettings: React.FC = () => {
     if (!apiKey.trim()) return;
     setSaving(true);
     try {
-      const result = await window.electronAPI.setApiKey('openrouter', apiKey);
+      const result = await window.desktopAPI.setApiKey('openrouter', apiKey);
       if (result?.success) {
         setHasKey(true);
         setApiKey('');
@@ -49,7 +49,7 @@ export const AIProvidersSettings: React.FC = () => {
   const handleRemove = async () => {
     if (!confirm('Remove OpenRouter API key?')) return;
     try {
-      const result = await window.electronAPI.setApiKey('openrouter', '');
+      const result = await window.desktopAPI.setApiKey('openrouter', '');
       if (result?.success) {
         setHasKey(false);
         setApiKey('');
@@ -61,7 +61,7 @@ export const AIProvidersSettings: React.FC = () => {
     setTestStatus('testing');
     setTestError('');
     try {
-      const result = await window.electronAPI.testLlmConnection('openrouter', apiKey || undefined);
+      const result = await window.desktopAPI.testLlmConnection('openrouter', apiKey || undefined);
       if (result.success) {
         setTestStatus('success');
         setTimeout(() => setTestStatus('idle'), 3000);
@@ -77,7 +77,7 @@ export const AIProvidersSettings: React.FC = () => {
 
   const handleSelectModel = (modelId: string) => {
     setDefaultModel(modelId);
-    window.electronAPI.setModel(modelId).catch(console.error);
+    window.desktopAPI.setModel(modelId).catch(console.error);
   };
 
   const handleAddCustomModel = () => {
@@ -99,7 +99,7 @@ export const AIProvidersSettings: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => window.electronAPI.openExternal('https://openrouter.ai/keys')}
+            onClick={() => window.desktopAPI.openExternal('https://openrouter.ai/keys')}
             className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
           >
             Get key <ExternalLink size={10} />
@@ -241,7 +241,7 @@ function QuestionDetectionSection() {
   useEffect(() => {
     const load = async () => {
       try {
-        const config = await window.electronAPI.getQuestionAnalysisConfig();
+        const config = await window.desktopAPI.getQuestionAnalysisConfig();
         setEnabled(config.enabled);
         setIntervalVal(config.interval);
         const hasCustom = !!(config.model && config.model.trim());
@@ -252,7 +252,7 @@ function QuestionDetectionSection() {
       } catch {}
     };
     load();
-    const unsub = window.electronAPI.onQuestionAnalysisConfigChanged((config) => {
+    const unsub = window.desktopAPI.onQuestionAnalysisConfigChanged((config) => {
       setEnabled(config.enabled);
       setIntervalVal(config.interval);
     });
@@ -261,7 +261,7 @@ function QuestionDetectionSection() {
 
   const handleToggle = (val: boolean) => {
     setEnabled(val);
-    window.electronAPI.setQuestionAnalysisConfig({ enabled: val });
+    window.desktopAPI.setQuestionAnalysisConfig({ enabled: val });
   };
 
   const handleIntervalChange = (val: string) => {
@@ -272,19 +272,19 @@ function QuestionDetectionSection() {
   const commitInterval = () => {
     const clamped = Math.max(5, Math.min(120, interval));
     setIntervalVal(clamped);
-    window.electronAPI.setQuestionAnalysisConfig({ interval: clamped });
+    window.desktopAPI.setQuestionAnalysisConfig({ interval: clamped });
   };
 
   const handleModelSelect = (modelId: string) => {
     setScanModel(modelId);
-    window.electronAPI.setQuestionAnalysisConfig({ model: modelId });
+    window.desktopAPI.setQuestionAnalysisConfig({ model: modelId });
   };
 
   const handleCustomModelToggle = (val: boolean) => {
     setUseCustomModel(val);
     if (!val) {
       setScanModel('');
-      window.electronAPI.setQuestionAnalysisConfig({ model: '' });
+      window.desktopAPI.setQuestionAnalysisConfig({ model: '' });
     }
   };
 
@@ -292,7 +292,7 @@ function QuestionDetectionSection() {
     if (!scanKey.trim()) return;
     setScanSaving(true);
     try {
-      await window.electronAPI.setQuestionAnalysisConfig({ openRouterApiKey: scanKey });
+      await window.desktopAPI.setQuestionAnalysisConfig({ openRouterApiKey: scanKey });
       setHasScanKey(true);
       setScanKey('');
       setScanSaved(true);
@@ -303,7 +303,7 @@ function QuestionDetectionSection() {
   };
 
   const handleRemoveScanKey = async () => {
-    await window.electronAPI.setQuestionAnalysisConfig({ openRouterApiKey: '' });
+    await window.desktopAPI.setQuestionAnalysisConfig({ openRouterApiKey: '' });
     setHasScanKey(false);
   };
 
@@ -359,7 +359,7 @@ function QuestionDetectionSection() {
             onBlur={() => {
               const clamped = Math.max(5, Math.min(100, windowSize || 20));
               setWindowSize(clamped);
-              window.electronAPI.setQuestionAnalysisConfig({ window: clamped });
+              window.desktopAPI.setQuestionAnalysisConfig({ window: clamped });
             }}
             disabled={!enabled}
             className="w-20 text-sm text-center"
@@ -402,12 +402,12 @@ function QuestionDetectionSection() {
                 onChange={(e) => setScanModel(e.target.value)}
                 onBlur={() => {
                   if (scanModel.trim()) {
-                    window.electronAPI.setQuestionAnalysisConfig({ model: scanModel.trim() });
+                    window.desktopAPI.setQuestionAnalysisConfig({ model: scanModel.trim() });
                   }
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && scanModel.trim()) {
-                    window.electronAPI.setQuestionAnalysisConfig({ model: scanModel.trim() });
+                    window.desktopAPI.setQuestionAnalysisConfig({ model: scanModel.trim() });
                   }
                 }}
                 disabled={!enabled}

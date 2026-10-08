@@ -231,20 +231,20 @@ export const useOverlayKeyboard = ({
   }, [isShortcutPressed, scrollContainerRef]);
 
   const generalHandlersRef = useRef({
-    toggleVisibility: () => window.electronAPI.toggleWindow(),
+    toggleVisibility: () => window.desktopAPI.toggleWindow(),
     processScreenshots: intelligence.handleWhatToSay,
     resetCancel: async () => {},
     takeScreenshot: async () => {},
   });
   generalHandlersRef.current = {
-    toggleVisibility: () => window.electronAPI.toggleWindow(),
+    toggleVisibility: () => window.desktopAPI.toggleWindow(),
     processScreenshots: intelligence.handleWhatToSay,
     resetCancel: async () => {
       if (isProcessing) {
         stopChat();
         return;
       }
-      await window.electronAPI.resetIntelligence();
+      await window.desktopAPI.resetIntelligence();
       setMessages([]);
       answerPanelPinnedRef.current = false;
       setSuggestionPanelPinned(false);
@@ -257,7 +257,7 @@ export const useOverlayKeyboard = ({
         return;
       }
       try {
-        const data = await window.electronAPI.takeScreenshot();
+        const data = await window.desktopAPI.takeScreenshot();
         if (data?.path)
           intelligence.handleScreenshotAttach(data as AttachmentContext);
       } catch (err) {
@@ -393,7 +393,7 @@ export const useOverlayKeyboard = ({
   }, [scrollContainerRef]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onGlobalShortcut(({ action }) => {
+    const unsubscribe = window.desktopAPI.onGlobalShortcut(({ action }) => {
       const handlers = handlersRef.current;
       const generalHandlers = generalHandlersRef.current;
       isStealthRef.current = true;
@@ -431,7 +431,7 @@ export const useOverlayKeyboard = ({
 
   useEffect(() => {
     let escSuppressUntilNextActive = false;
-    const unsubState = window.electronAPI.onStealthTapState(
+    const unsubState = window.desktopAPI.onStealthTapState(
       ({ active, reason }) => {
         stealthTapActiveRef.current = active;
         setStealthTapActive(active);
@@ -448,7 +448,7 @@ export const useOverlayKeyboard = ({
         }
       }
     );
-    const unsubKey = window.electronAPI.onStealthKeyCaptured((ev) => {
+    const unsubKey = window.desktopAPI.onStealthKeyCaptured((ev) => {
       if (ev.isKeyDown && ev.keyCode === 53) {
         setInputValue('');
         escSuppressUntilNextActive = true;
@@ -464,7 +464,7 @@ export const useOverlayKeyboard = ({
         return;
       if (ev.keyCode === 36 || ev.keyCode === 76) {
         intelligence.handleManualSubmitRef.current();
-        window.electronAPI.stealthTapStop().catch(() => {});
+        window.desktopAPI.stealthTapStop().catch(() => {});
         return;
       }
       if (ev.keyCode === 51) {
@@ -497,7 +497,7 @@ export const useOverlayKeyboard = ({
   ]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onKeybindRegistrationFailed(
+    const unsubscribe = window.desktopAPI.onKeybindRegistrationFailed(
       ({ id, accelerator }) => {
         if (id === 'chat:focusInput') setStealthHotkeyConflict(accelerator);
       }
@@ -508,7 +508,7 @@ export const useOverlayKeyboard = ({
   useEffect(() => {
     stealthAutoEngageOkRef.current = true;
     isCgEventTapAvailableRef.current = resolveCgEventTapAvailable(
-      window.electronAPI.platform
+      window.desktopAPI.platform
     );
     const onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
@@ -524,7 +524,7 @@ export const useOverlayKeyboard = ({
       )
         return;
       if (!isCgEventTapAvailableRef.current) return;
-      window.electronAPI
+      window.desktopAPI
         .stealthTapStart()
         .catch((err) => console.warn('[stealth] tap start IPC failed', err));
     };
@@ -538,7 +538,7 @@ export const useOverlayKeyboard = ({
     const onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest?.('[data-model-selector-toggle="true"]')) return;
-      window.electronAPI.modelSelectorCloseIfOpen().catch(() => {});
+      window.desktopAPI.modelSelectorCloseIfOpen().catch(() => {});
     };
     document.addEventListener('mousedown', onMouseDown, true);
     return () => document.removeEventListener('mousedown', onMouseDown, true);

@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
-import { ElectronAPI } from './types/electron';
 
-interface Window {
-  electronAPI: ElectronAPI;
+import type { DesktopAPI } from './types/desktop';
+
+declare global {
+  interface Window {
+    desktopAPI: DesktopAPI;
+  }
 }
+
+export {};

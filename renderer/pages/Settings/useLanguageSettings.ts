@@ -10,10 +10,10 @@ export const useLanguageSettings = () => {
 
   useEffect(() => {
     const loadRecognitionLanguages = async () => {
-      const langs = await window.electronAPI.getRecognitionLanguages();
+      const langs = await window.desktopAPI.getRecognitionLanguages();
       setAvailableLanguages(langs);
 
-      const storedStt = await window.electronAPI.getSttLanguage();
+      const storedStt = await window.desktopAPI.getSttLanguage();
       let currentLangKey = storedStt;
 
       if (!currentLangKey) {
@@ -28,7 +28,7 @@ export const useLanguageSettings = () => {
         currentLangKey = match ? match[0] : 'auto';
       }
       if (!storedStt) {
-        window.electronAPI.setRecognitionLanguage(currentLangKey);
+        window.desktopAPI.setRecognitionLanguage(currentLangKey);
       }
 
       setRecognitionLanguage(currentLangKey);
@@ -49,7 +49,7 @@ export const useLanguageSettings = () => {
     if (availableLanguages[key]) {
       setSelectedSttGroup(availableLanguages[key].group);
     }
-    await window.electronAPI.setRecognitionLanguage(key);
+    await window.desktopAPI.setRecognitionLanguage(key);
   };
 
   const handleGroupChange = (group: string) => {

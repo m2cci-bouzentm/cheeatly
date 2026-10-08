@@ -132,7 +132,7 @@ const SkillDetail = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    window.electronAPI.skillsGet(skill.name).then(c => {
+    window.desktopAPI.skillsGet(skill.name).then(c => {
       setContent(c);
       setEditContent(c ?? '');
     });
@@ -141,7 +141,7 @@ const SkillDetail = ({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await window.electronAPI.skillsUpdate(skill.name, {
+      await window.desktopAPI.skillsUpdate(skill.name, {
         content: editContent,
         description,
       });
@@ -287,7 +287,7 @@ export const SkillsTab = () => {
   selectedRef.current = selectedSkill;
 
   const loadSkills = useCallback(() => {
-    window.electronAPI.skillsList().then(list => {
+    window.desktopAPI.skillsList().then(list => {
       setSkills(list);
       const current = selectedRef.current;
       if (current) {
@@ -299,7 +299,7 @@ export const SkillsTab = () => {
 
   useEffect(() => {
     loadSkills();
-    const off = window.electronAPI.onSkillsChanged(loadSkills);
+    const off = window.desktopAPI.onSkillsChanged(loadSkills);
     return off;
   }, [loadSkills]);
 
@@ -307,7 +307,7 @@ export const SkillsTab = () => {
     setImporting(true);
     setImportError(null);
     try {
-      const res = await window.electronAPI.skillsImport();
+      const res = await window.desktopAPI.skillsImport();
       if (res?.error) setImportError(res.error);
     } catch (e) {
       setImportError(e instanceof Error ? e.message : 'Import failed.');
@@ -322,7 +322,7 @@ export const SkillsTab = () => {
       setSelectedSkill(prev => prev ? { ...prev, enabled } : null);
     }
     try {
-      await window.electronAPI.skillsToggle(name, enabled);
+      await window.desktopAPI.skillsToggle(name, enabled);
     } catch {
       setSkills(prev => prev.map(s => s.name === name ? { ...s, enabled: !enabled } : s));
     }
@@ -330,7 +330,7 @@ export const SkillsTab = () => {
 
   const handleRemove = async (name: string) => {
     try {
-      await window.electronAPI.skillsRemove(name);
+      await window.desktopAPI.skillsRemove(name);
       if (selectedSkill?.name === name) setSelectedSkill(null);
     } catch (e) {
       console.error('Skill removal failed:', e);

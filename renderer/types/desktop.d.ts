@@ -1,4 +1,4 @@
-export interface ElectronAPI {
+export interface DesktopAPI {
   updateContentDimensions: (dimensions: {
     width: number;
     height: number;
@@ -109,6 +109,27 @@ export interface ElectronAPI {
     provider: 'none' | 'local-parakeet'
   ) => Promise<{ success: boolean; error?: string }>;
   getSttProvider: () => Promise<string>;
+  localParakeetGetConfig: () => Promise<{
+    modelId: string;
+    language: string;
+    models: Array<{ id: string; name: string; size: string; cached: boolean }>;
+  }>;
+  localParakeetSetConfig: (config: {
+    modelId?: string;
+    language?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  localParakeetDownloadModel: (
+    modelId: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  onLocalParakeetDownloadStatus: (
+    callback: (data: { modelId: string; message: string }) => void
+  ) => () => void;
+  onLocalParakeetDownloadComplete: (
+    callback: (data: { modelId: string }) => void
+  ) => () => void;
+  onLocalParakeetDownloadError: (
+    callback: (data: { modelId: string; error: string }) => void
+  ) => () => void;
 
   // STT Config Events (fired when STT provider/key changes during a meeting)
   onSttConfigChanged: (
@@ -292,17 +313,26 @@ export interface ElectronAPI {
   ) => () => void;
 
   // Skills
-  skillsList: () => Promise<Array<{
-    id: string;
-    name: string;
-    description: string;
-    enabled: boolean;
-    bundled: boolean;
-  }>>;
+  skillsList: () => Promise<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      enabled: boolean;
+      bundled: boolean;
+    }>
+  >;
   skillsGet: (name: string) => Promise<string | null>;
-  skillsImport: () => Promise<{ cancelled: boolean; imported: string[]; error?: string }>;
+  skillsImport: () => Promise<{
+    cancelled: boolean;
+    imported: string[];
+    error?: string;
+  }>;
   skillsToggle: (name: string, enabled: boolean) => Promise<void>;
-  skillsUpdate: (name: string, patch: { enabled?: boolean; content?: string; description?: string }) => Promise<void>;
+  skillsUpdate: (
+    name: string,
+    patch: { enabled?: boolean; content?: string; description?: string }
+  ) => Promise<void>;
   skillsRemove: (name: string) => Promise<void>;
   onSkillsChanged: (callback: () => void) => () => void;
 
@@ -429,6 +459,6 @@ export interface ElectronAPI {
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    desktopAPI: DesktopAPI;
   }
 }

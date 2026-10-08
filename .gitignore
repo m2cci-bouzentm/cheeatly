@@ -198,6 +198,7 @@ release/
 target/
 platform-bridge/target/
 platform-bridge/*.node
+src-tauri/binaries/speech-to-text-*
 
 .github/RepoGuide.md
 

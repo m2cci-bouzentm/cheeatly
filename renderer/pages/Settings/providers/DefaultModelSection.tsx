@@ -35,7 +35,7 @@ export const DefaultModelSection: React.FC<{ ctx: any }> = ({ ctx }) => {
           options={options}
           onChange={(val) => {
             setDefaultModel(val);
-            window.electronAPI.setModel(val).catch(console.error);
+            window.desktopAPI.setModel(val).catch(console.error);
           }}
         />
       </div>

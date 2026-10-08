@@ -18,13 +18,13 @@ export const ContextTab = () => {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    window.electronAPI
+    window.desktopAPI
       .contextGetDescription()
       .then((res) => {
         if (res.success && res.content) setContextText(res.content);
       })
       .catch(() => {});
-    window.electronAPI
+    window.desktopAPI
       .contextGetFiles()
       .then((res) => {
         if (res.success) setFiles(res.files);
@@ -37,7 +37,7 @@ export const ContextTab = () => {
     setSaved(false);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      window.electronAPI
+      window.desktopAPI
         .contextSaveDescription(value)
         .then(() => setSaved(true))
         .catch(() => {});
@@ -48,7 +48,7 @@ export const ContextTab = () => {
     setUploading(true);
     setUploadError(null);
     try {
-      const res = await window.electronAPI.contextUploadFile();
+      const res = await window.desktopAPI.contextUploadFile();
       if (res?.cancelled) return;
       if (res?.success && res.file) {
         setFiles((prev) => [...prev, res.file!]);
@@ -64,7 +64,7 @@ export const ContextTab = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await window.electronAPI.contextDeleteFile(id);
+      await window.desktopAPI.contextDeleteFile(id);
       setFiles((prev) => prev.filter((f) => f.id !== id));
     } catch (e) {
       console.error('Delete failed:', e);

@@ -27,7 +27,7 @@ export const useAudioSettings = (
   useEffect(() => {
     const loadSttSettings = async () => {
       try {
-        const creds = await window.electronAPI.getStoredCredentials();
+        const creds = await window.desktopAPI.getStoredCredentials();
         if (creds) {
           const savedProvider = (creds as any).sttProvider;
           setSttProvider(
@@ -42,9 +42,9 @@ export const useAudioSettings = (
   }, [isOpen]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onCredentialsChanged(() => {
+    const unsubscribe = window.desktopAPI.onCredentialsChanged(() => {
       if (isOpen) {
-        window.electronAPI
+        window.desktopAPI
           .getStoredCredentials()
           .then((creds: any) => {
             if (!creds) return;
@@ -66,7 +66,7 @@ export const useAudioSettings = (
   ) => {
     setSttProvider(provider);
     try {
-      await window.electronAPI.setSttProvider(provider);
+      await window.desktopAPI.setSttProvider(provider);
     } catch (e) {
       console.error('Failed to set STT provider:', e);
     }
@@ -75,13 +75,13 @@ export const useAudioSettings = (
   useEffect(() => {
     if (!isOpen) return;
 
-    window.electronAPI.getUndetectable().then(setIsUndetectable);
-    window.electronAPI.getOpenAtLogin().then(setOpenOnLogin);
+    window.desktopAPI.getUndetectable().then(setIsUndetectable);
+    window.desktopAPI.getOpenAtLogin().then(setOpenOnLogin);
     const loadDevices = async () => {
       try {
         const [inputs, outputs] = await Promise.all([
-          window.electronAPI.getInputDevices() || Promise.resolve([]),
-          window.electronAPI.getOutputDevices() || Promise.resolve([]),
+          window.desktopAPI.getInputDevices() || Promise.resolve([]),
+          window.desktopAPI.getOutputDevices() || Promise.resolve([]),
         ]);
 
         const formatDevices = (devs: any[]) =>
@@ -132,7 +132,7 @@ export const useAudioSettings = (
   }, [isOpen, selectedInput, selectedOutput]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onDeviceSelectionApplied(
+    const unsubscribe = window.desktopAPI.onDeviceSelectionApplied(
       (payload) => {
         if (payload.fellBack) {
           setDeviceFallbackNotice({
@@ -154,18 +154,18 @@ export const useAudioSettings = (
   // Use the native mic test path so Settings and meeting runtime share device IDs.
   useEffect(() => {
     if (isOpen && activeTab === 'audio' && selectedInput) {
-      const unsubscribe = window.electronAPI.onAudioTestLevel((level) => {
+      const unsubscribe = window.desktopAPI.onAudioTestLevel((level) => {
         setMicLevel(Math.max(0, Math.min(100, level * 100)));
       });
 
-      window.electronAPI.startAudioTest(selectedInput).catch((error) => {
+      window.desktopAPI.startAudioTest(selectedInput).catch((error) => {
         console.error('Error starting native microphone test:', error);
         setMicLevel(0);
       });
 
       return () => {
         unsubscribe?.();
-        window.electronAPI.stopAudioTest().catch((error) => {
+        window.desktopAPI.stopAudioTest().catch((error) => {
           console.error('Error stopping native microphone test:', error);
         });
         setMicLevel(0);

@@ -74,7 +74,7 @@ const SettingsShell: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div className="mt-auto p-3 border-t border-border-subtle">
             <Button
               variant="ghost"
-              onClick={() => window.electronAPI.quitApp()}
+              onClick={() => window.desktopAPI.quitApp()}
               className="w-full justify-start px-2 py-1.5 rounded-md text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-400 flex items-center gap-2.5"
             >
               <LogOut size={15} /> Quit Cheatly

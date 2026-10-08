@@ -75,7 +75,7 @@ const TranscriptPanel = ({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => window.electronAPI.toggleSettingsWindow()}
+              onClick={() => window.desktopAPI.toggleSettingsWindow()}
               className="h-7 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider border-0"
             >
               Open Settings

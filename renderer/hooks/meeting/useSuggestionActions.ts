@@ -295,7 +295,7 @@ export const useSuggestionActions = ({
   }, []);
 
   useEffect(() => {
-    const cleanupTaken = window.electronAPI.onScreenshotTaken(
+    const cleanupTaken = window.desktopAPI.onScreenshotTaken(
       handleScreenshotAttach
     );
     return () => {
@@ -304,7 +304,7 @@ export const useSuggestionActions = ({
   }, [handleScreenshotAttach]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onCaptureAndProcess((data) => {
+    const unsubscribe = window.desktopAPI.onCaptureAndProcess((data) => {
       setIsExpanded(true);
       pendingCaptureRef.current = data;
       setAttachedContext((prev) => {

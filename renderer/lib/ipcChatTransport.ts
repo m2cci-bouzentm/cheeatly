@@ -26,7 +26,7 @@ export class IpcChatTransport implements ChatTransport<UIMessage> {
           fn();
         };
 
-        const off = window.electronAPI.onChatStreamEvent((evt) => {
+        const off = window.desktopAPI.onChatStreamEvent((evt) => {
           if (evt.streamId !== streamId) return;
           if (evt.type === 'chunk') {
             controller.enqueue(evt.chunk as UIMessageChunk);
@@ -42,10 +42,10 @@ export class IpcChatTransport implements ChatTransport<UIMessage> {
         });
 
         options.abortSignal?.addEventListener('abort', () => {
-          window.electronAPI.chatStreamAbort(streamId);
+          window.desktopAPI.chatStreamAbort(streamId);
         });
 
-        window.electronAPI
+        window.desktopAPI
           .chatStreamStart(streamId, options.messages, {
             system: body.system,
           })

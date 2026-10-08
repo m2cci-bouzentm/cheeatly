@@ -12,14 +12,14 @@ const WindowControls: React.FC = () => {
   useEffect(() => {
     let active = true;
 
-    window.electronAPI
+    window.desktopAPI
       .windowIsMaximized()
       .then((maximized: boolean) => {
         if (active) setIsMaximized(maximized);
       })
       .catch(() => {});
 
-    const unsubscribe = window.electronAPI.onWindowMaximizedChanged(
+    const unsubscribe = window.desktopAPI.onWindowMaximizedChanged(
       (maximized: boolean) => {
         setIsMaximized(maximized);
       }
@@ -31,9 +31,9 @@ const WindowControls: React.FC = () => {
     };
   }, []);
 
-  const handleMinimize = () => window.electronAPI.windowMinimize();
-  const handleMaximize = () => window.electronAPI.windowMaximize();
-  const handleClose = () => window.electronAPI.windowClose();
+  const handleMinimize = () => window.desktopAPI.windowMinimize();
+  const handleMaximize = () => window.desktopAPI.windowMaximize();
+  const handleClose = () => window.desktopAPI.windowClose();
 
   return (
     <div className="flex h-[40px]">

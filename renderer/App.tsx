@@ -84,13 +84,13 @@ const App: React.FC = () => {
       setShowPermissionsToaster(true);
     }
 
-    const removeOpenSettingsTab = window.electronAPI.onOpenSettingsTab?.(
+    const removeOpenSettingsTab = window.desktopAPI.onOpenSettingsTab?.(
       (tab: string) => {
         openSettingsExclusive(tab);
       }
     );
 
-    const removeMeetingsListener = window.electronAPI.onMeetingsUpdated?.(
+    const removeMeetingsListener = window.desktopAPI.onMeetingsUpdated?.(
       () => {
         console.log(
           '[App.tsx] Meetings updated (processing finished), starting ad delay timer'
@@ -106,7 +106,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isOverlayWindow) return;
-    const removeOpacityListener = window.electronAPI.onOverlayOpacityChanged?.(
+    const removeOpacityListener = window.desktopAPI.onOverlayOpacityChanged?.(
       (opacity) => {
         setOverlayOpacity(opacity);
       }
@@ -136,7 +136,7 @@ const App: React.FC = () => {
         console.log('[App] Using CoreAudio backend (Default).');
       }
 
-      const result = await window.electronAPI.startMeeting({
+      const result = await window.desktopAPI.startMeeting({
         audio: { inputDeviceId, outputDeviceId },
       });
       if (result.success) {

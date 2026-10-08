@@ -31,7 +31,7 @@ const Meetings: React.FC<MeetingsProps> = ({
   const [showNotification, setShowNotification] = useState(false);
 
   const fetchMeetings = () => {
-    window.electronAPI
+    window.desktopAPI
       .getRecentMeetings()
       .then(setMeetings)
       .catch((err) => console.error('Failed to fetch meetings:', err));
@@ -59,12 +59,12 @@ const Meetings: React.FC<MeetingsProps> = ({
     let mounted = true;
     console.log('Launcher mounted');
 
-    window.electronAPI.getUndetectable().then((undetectable) => {
+    window.desktopAPI.getUndetectable().then((undetectable) => {
       if (mounted) setIsDetectable(!undetectable);
     });
 
     let removeUndetectableListener: (() => void) | undefined;
-    removeUndetectableListener = window.electronAPI.onUndetectableChanged(
+    removeUndetectableListener = window.desktopAPI.onUndetectableChanged(
       (undetectable) => {
         setIsDetectable(!undetectable);
       }
@@ -73,7 +73,7 @@ const Meetings: React.FC<MeetingsProps> = ({
     fetchMeetings();
 
     // Guard async state sync so unmounted launchers are not written to.
-    window.electronAPI
+    window.desktopAPI
       .getMeetingActive()
       .then((active) => {
         if (mounted) setIsMeetingActive(active);
@@ -81,13 +81,13 @@ const Meetings: React.FC<MeetingsProps> = ({
       .catch(() => {});
 
     let removeMeetingStateListener: (() => void) | undefined;
-    removeMeetingStateListener = window.electronAPI.onMeetingStateChanged(
+    removeMeetingStateListener = window.desktopAPI.onMeetingStateChanged(
       ({ isActive }) => {
         setIsMeetingActive(isActive);
       }
     );
 
-    const removeMeetingsListener = window.electronAPI.onMeetingsUpdated(() => {
+    const removeMeetingsListener = window.desktopAPI.onMeetingsUpdated(() => {
       console.log('Received meetings-updated event');
       fetchMeetings();
     });
@@ -105,27 +105,27 @@ const Meetings: React.FC<MeetingsProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isShortcutPressed(e, 'toggleVisibility')) {
         e.preventDefault();
-        window.electronAPI.toggleWindow();
+        window.desktopAPI.toggleWindow();
         return;
       }
       if (isShortcutPressed(e, 'moveWindowUp')) {
         e.preventDefault();
-        window.electronAPI.moveWindowUp();
+        window.desktopAPI.moveWindowUp();
         return;
       }
       if (isShortcutPressed(e, 'moveWindowDown')) {
         e.preventDefault();
-        window.electronAPI.moveWindowDown();
+        window.desktopAPI.moveWindowDown();
         return;
       }
       if (isShortcutPressed(e, 'moveWindowLeft')) {
         e.preventDefault();
-        window.electronAPI.moveWindowLeft();
+        window.desktopAPI.moveWindowLeft();
         return;
       }
       if (isShortcutPressed(e, 'moveWindowRight')) {
         e.preventDefault();
-        window.electronAPI.moveWindowRight();
+        window.desktopAPI.moveWindowRight();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -137,7 +137,7 @@ const Meetings: React.FC<MeetingsProps> = ({
   const toggleDetectable = () => {
     const newState = !isDetectable;
     setIsDetectable(newState);
-    window.electronAPI.setUndetectable(!newState);
+    window.desktopAPI.setUndetectable(!newState);
     analytics.trackModeSelected(newState ? 'launcher' : 'undetectable');
   };
 
@@ -187,7 +187,7 @@ const Meetings: React.FC<MeetingsProps> = ({
 
     try {
       console.log('[Launcher] Fetching full meeting details...');
-      const fullMeeting = await window.electronAPI.getMeetingDetails(
+      const fullMeeting = await window.desktopAPI.getMeetingDetails(
         meeting.id
       );
       console.log('[Launcher] Got meeting details:', fullMeeting);
@@ -352,7 +352,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                       onClick={() => {
                         if (isMeetingActive) {
                           // setWindowMode restores overlay mode without stealing foreground focus.
-                          window.electronAPI.setWindowMode('overlay', true);
+                          window.desktopAPI.setWindowMode('overlay', true);
                           analytics.trackCommandExecuted(
                             'resume_meeting_from_launcher'
                           );
@@ -474,7 +474,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                                       title="Retry summary"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        window.electronAPI.retryMeetingSummary(
+                                        window.desktopAPI.retryMeetingSummary(
                                           m.id
                                         );
                                       }}
@@ -534,7 +534,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                                           analytics.trackPdfExported();
                                           try {
                                             const fullMeeting =
-                                              await window.electronAPI.getMeetingDetails(
+                                              await window.desktopAPI.getMeetingDetails(
                                                 m.id
                                               );
                                             if (fullMeeting) {
@@ -560,7 +560,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                                         className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors text-left justify-start h-auto"
                                         onClick={async () => {
                                           const success =
-                                            await window.electronAPI.deleteMeeting(
+                                            await window.desktopAPI.deleteMeeting(
                                               m.id
                                             );
                                           if (success)

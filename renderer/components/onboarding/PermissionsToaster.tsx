@@ -45,7 +45,7 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
   const refreshStatus = useCallback(async () => {
     setRefreshing(true);
     try {
-      const p = await window.electronAPI.checkPermissions();
+      const p = await window.desktopAPI.checkPermissions();
       if (p) {
         setPlatform(p.platform);
         setMicStatus(p.microphone as PermStatus);
@@ -74,7 +74,7 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
 
   const openSystemSettings = () => {
     if (platform !== 'darwin') return;
-    window.electronAPI.openExternal(
+    window.desktopAPI.openExternal(
       'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
     );
   };

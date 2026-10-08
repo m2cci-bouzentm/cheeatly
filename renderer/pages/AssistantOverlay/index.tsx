@@ -72,7 +72,7 @@ function roleLabel(role: string): string {
 }
 
 const updateShellDimensions = (width: number, height: number) => {
-  window.electronAPI.updateContentDimensions({ width, height });
+  window.desktopAPI.updateContentDimensions({ width, height });
 };
 
 const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
@@ -296,7 +296,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   useEffect(() => {
     let mounted = true;
     const loadLlmRoute = async () => {
-      const config = await window.electronAPI
+      const config = await window.desktopAPI
         .getCurrentLlmConfig()
         .catch(() => null);
       if (!mounted || !config) return;
@@ -306,7 +306,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
       );
     };
     loadLlmRoute();
-    const unsub = window.electronAPI.onModelChanged(() => loadLlmRoute());
+    const unsub = window.desktopAPI.onModelChanged(() => loadLlmRoute());
     return () => {
       mounted = false;
       unsub?.();
@@ -314,12 +314,12 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   }, []);
 
   useEffect(() => {
-    window.electronAPI
+    window.desktopAPI
       .getDefaultModel()
       .then((result: any) => {
         if (result?.model) {
           setCurrentModel(result.model);
-          window.electronAPI.setModel(result.model).catch(() => {});
+          window.desktopAPI.setModel(result.model).catch(() => {});
         }
       })
       .catch((err: any) =>
@@ -328,15 +328,15 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onModelChanged((modelId: string) => {
+    const unsubscribe = window.desktopAPI.onModelChanged((modelId: string) => {
       setCurrentModel((prev) => (prev === modelId ? prev : modelId));
     });
     return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
-    window.electronAPI.getUndetectable().then(setIsUndetectable);
-    const unsubscribe = window.electronAPI.onUndetectableChanged((state) =>
+    window.desktopAPI.getUndetectable().then(setIsUndetectable);
+    const unsubscribe = window.desktopAPI.onUndetectableChanged((state) =>
       setIsUndetectable(state)
     );
     return () => unsubscribe?.();
@@ -359,7 +359,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   }, [messages]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onSettingsVisibilityChange(
+    const unsubscribe = window.desktopAPI.onSettingsVisibilityChange(
       (isVisible) => setIsSettingsOpen(isVisible)
     );
     return () => unsubscribe?.();
@@ -373,21 +373,21 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     }
     if (isExpanded) {
       setActiveTab('assistant');
-      window.electronAPI.showWindow(isStealthRef.current);
+      window.desktopAPI.showWindow(isStealthRef.current);
       isStealthRef.current = false;
       return;
     }
-    setTimeout(() => window.electronAPI.hideWindow(), 400);
+    setTimeout(() => window.desktopAPI.hideWindow(), 400);
   }, [isExpanded]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onToggleExpand(() =>
+    const unsubscribe = window.desktopAPI.onToggleExpand(() =>
       setIsExpanded((prev) => !prev)
     );
     return () => unsubscribe?.();
   }, []);
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onEnsureExpanded(() => {
+    const unsubscribe = window.desktopAPI.onEnsureExpanded(() => {
       isStealthRef.current = true;
       setIsExpanded(true);
     });
@@ -588,10 +588,10 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
         ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
         : 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
     if (url) {
-      window.electronAPI.openExternal(url);
+      window.desktopAPI.openExternal(url);
       return;
     }
-    window.electronAPI.toggleSettingsWindow();
+    window.desktopAPI.toggleSettingsWindow();
   };
 
   const channelDotClass = (
@@ -662,13 +662,13 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                   expanded={isExpanded}
                   onToggle={() => setIsExpanded(!isExpanded)}
                   onBackToApp={() =>
-                    window.electronAPI.setWindowMode('launcher')
+                    window.desktopAPI.setWindowMode('launcher')
                   }
-                  onAbort={() => window.electronAPI.abortMeeting()}
-                  onEnd={() => window.electronAPI.endMeeting()}
+                  onAbort={() => window.desktopAPI.abortMeeting()}
+                  onEnd={() => window.desktopAPI.endMeeting()}
                   appearance={appearance}
                   onLogoClick={() =>
-                    window.electronAPI.setWindowMode('launcher')
+                    window.desktopAPI.setWindowMode('launcher')
                   }
                 />
               </div>
@@ -852,7 +852,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                             const GAP = 8;
                             const x = window.screenX + buttonRect.left;
                             const y = window.screenY + contentRect.bottom + GAP;
-                            window.electronAPI.toggleModelSelector({
+                            window.desktopAPI.toggleModelSelector({
                               x,
                               y,
                               activate: false,
@@ -872,7 +872,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                           size="icon"
                           onClick={(e) => {
                             if (isSettingsOpen) {
-                              window.electronAPI.toggleSettingsWindow();
+                              window.desktopAPI.toggleSettingsWindow();
                               return;
                             }
                             if (!contentRef.current) return;
@@ -883,7 +883,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                             const GAP = 8;
                             const x = window.screenX + buttonRect.left;
                             const y = window.screenY + contentRect.bottom + GAP;
-                            window.electronAPI.toggleSettingsWindow({
+                            window.desktopAPI.toggleSettingsWindow({
                               x,
                               y,
                             });
@@ -923,7 +923,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                                 onClick={() => {
                                   const next = !meeting.micMuted;
                                   meeting.setMicMuted(next);
-                                  window.electronAPI.setChannelMuted(
+                                  window.desktopAPI.setChannelMuted(
                                     'mic',
                                     next
                                   );
@@ -988,7 +988,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                                 onClick={() => {
                                   const next = !meeting.systemMuted;
                                   meeting.setSystemMuted(next);
-                                  window.electronAPI.setChannelMuted(
+                                  window.desktopAPI.setChannelMuted(
                                     'system',
                                     next
                                   );

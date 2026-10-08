@@ -46,7 +46,7 @@ export function useDetectedQuestions(
 
   useEffect(() => {
     let mounted = true;
-    window.electronAPI.getQuestionAnalysisConfig()
+    window.desktopAPI.getQuestionAnalysisConfig()
       .then((config) => {
         if (!mounted) return;
         setSettingsEnabled(config.enabled);
@@ -54,7 +54,7 @@ export function useDetectedQuestions(
         setWindowSize(config.window || 20);
       })
       .catch(() => {});
-    const unsubscribe = window.electronAPI.onQuestionAnalysisConfigChanged((config) => {
+    const unsubscribe = window.desktopAPI.onQuestionAnalysisConfigChanged((config) => {
       setSettingsEnabled(config.enabled);
       setIntervalSeconds(config.interval || 20);
     });
@@ -77,7 +77,7 @@ export function useDetectedQuestions(
 
     setIsScanning(true);
     try {
-      const result = await window.electronAPI.analyzeTranscript(transcript);
+      const result = await window.desktopAPI.analyzeTranscript(transcript);
       if (!result?.questions?.length) return;
 
       const newQuestions: DetectedQuestion[] = [];

@@ -215,7 +215,7 @@ const SuggestionControls = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.electronAPI.openSettingsTab('keybinds')}
+              onClick={() => window.desktopAPI.openSettingsTab('keybinds')}
               className="h-5 px-1.5 rounded-md text-[9px] font-bold uppercase"
               data-stealth-ignore="true"
             >
@@ -242,7 +242,7 @@ const SuggestionControls = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.electronAPI.stealthTapOpenSettings()}
+              onClick={() => window.desktopAPI.stealthTapOpenSettings()}
               className="h-5 px-1.5 rounded-md text-[9px] font-bold uppercase"
               data-stealth-ignore="true"
             >
