@@ -78,6 +78,7 @@ pub fn start_meeting(
                     .clone()
                     .unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
                 language: credentials.stt_language.unwrap_or_else(|| "auto".into()),
+                source: crate::transcription::provider::AudioSource::Microphone,
             },
         )
         .map_err(error)?;

@@ -82,19 +82,29 @@ impl TranscriptionProvider for LocalCoreMlProvider {
                     Some("system") => AudioSource::System,
                     _ => AudioSource::Microphone,
                 };
-                let _ = events.send(TranscriptEvent {
-                    source,
-                    text: value
+                let text = super::provider::filter_transcript(
+                    value
                         .get("text")
                         .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_owned(),
+                        .unwrap_or_default(),
+                );
+                if text.is_empty() {
+                    continue;
+                }
+                let _ = events.send(TranscriptEvent {
+                    source,
+                    text,
                     final_result: kind == "final",
                 });
             }
         });
         self.child = Some(child);
-        self.write(json!({ "type": "start", "model": config.model, "language": config.language, "source": "mic" }))
+        let source = if config.source == AudioSource::System {
+            "system"
+        } else {
+            "mic"
+        };
+        self.write(json!({ "type": "start", "model": config.model, "language": config.language, "source": source }))
     }
 
     fn send_audio(&mut self, chunk: AudioChunk) -> anyhow::Result<()> {
