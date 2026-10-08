@@ -3,6 +3,8 @@ use std::{sync::mpsc, thread};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc as tokio_mpsc;
 
+use crate::state::MeetingState;
+
 use super::{
     audio_capture::{MicrophoneCapture, SystemAudioCapture},
     local_coreml::LocalCoreMlProvider,
@@ -20,6 +22,7 @@ enum SessionCommand {
         input_device_id: Option<String>,
         output_device_id: Option<String>,
         config: TranscriptionConfig,
+        meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
         response: mpsc::Sender<anyhow::Result<()>>,
     },
     Stop {
@@ -52,6 +55,7 @@ impl TranscriptionSession {
         input_device_id: Option<String>,
         output_device_id: Option<String>,
         config: TranscriptionConfig,
+        meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
     ) -> anyhow::Result<()> {
         let (response_tx, response_rx) = mpsc::channel();
         self.commands.send(SessionCommand::Start {
@@ -59,6 +63,7 @@ impl TranscriptionSession {
             input_device_id,
             output_device_id,
             config,
+            meeting,
             response: response_tx,
         })?;
         response_rx.recv()?
@@ -109,6 +114,7 @@ fn run(receiver: mpsc::Receiver<SessionCommand>) {
                 input_device_id,
                 output_device_id,
                 config,
+                meeting,
                 response,
             } => {
                 let result = start(
@@ -116,6 +122,7 @@ fn run(receiver: mpsc::Receiver<SessionCommand>) {
                     input_device_id,
                     output_device_id,
                     config,
+                    meeting,
                     &mut running,
                 );
                 let _ = response.send(result);
@@ -135,6 +142,7 @@ fn start(
     input_device_id: Option<String>,
     output_device_id: Option<String>,
     config: TranscriptionConfig,
+    meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
     running: &mut Option<RunningSession>,
 ) -> anyhow::Result<()> {
     if running.is_some() {
@@ -154,6 +162,18 @@ fn start(
     let event_app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = event_rx.recv().await {
+            if event.final_result {
+                if let Ok(mut meeting) = meeting.lock() {
+                    meeting.transcript.push(crate::state::TranscriptTurn {
+                        speaker: if event.speaker == "user" {
+                            "Me".into()
+                        } else {
+                            "Them".into()
+                        },
+                        text: event.text.clone(),
+                    });
+                }
+            }
             let _ = event_app.emit("native-audio-transcript", event);
         }
     });

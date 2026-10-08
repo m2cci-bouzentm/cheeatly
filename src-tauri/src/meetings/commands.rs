@@ -86,6 +86,7 @@ pub fn start_meeting(
                 language: credentials.stt_language.unwrap_or_else(|| "auto".into()),
                 source: crate::transcription::provider::AudioSource::Microphone,
             },
+            state.meeting.clone(),
         )
         .map_err(error)?;
     meeting.active = true;
