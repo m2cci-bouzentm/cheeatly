@@ -139,7 +139,13 @@ pub fn stealth_tap_start() -> bool {
     false
 }
 #[tauri::command]
-pub fn stealth_tap_stop() {}
+pub fn stealth_tap_stop(app: AppHandle) -> Result<(), String> {
+    app.emit(
+        "stealth-tap-state",
+        serde_json::json!({ "active": false, "reason": "stopped" }),
+    )
+    .map_err(|error| error.to_string())
+}
 #[tauri::command]
 pub fn stealth_tap_open_settings() -> Result<(), String> {
     std::process::Command::new("/usr/bin/open")
