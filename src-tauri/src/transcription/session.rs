@@ -199,3 +199,16 @@ fn stop(running: &mut Option<RunningSession>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TranscriptionSession;
+
+    #[test]
+    fn stop_is_awaitable_and_idempotent_without_active_session() {
+        let session = TranscriptionSession::new();
+        session.stop().unwrap();
+        session.stop().unwrap();
+        assert!(!session.active());
+    }
+}
