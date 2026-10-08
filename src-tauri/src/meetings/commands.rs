@@ -50,13 +50,12 @@ pub fn get_meeting_active(state: State<AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn start_meeting(
+pub async fn start_meeting(
     app: AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     metadata: Option<Value>,
 ) -> Result<Success, String> {
-    let mut meeting = state.meeting.lock().map_err(error)?;
-    if meeting.active {
+    if state.meeting.lock().map_err(error)?.active {
         return Err("A meeting is already active".into());
     }
     let input_device = metadata
@@ -70,27 +69,41 @@ pub fn start_meeting(
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
     let credentials = state.credentials.load().map_err(error)?;
-    let settings = state.settings.lock().map_err(error)?;
-    state
-        .transcription
-        .start_local(
-            &app,
+    let (model, language) = {
+        let settings = state.settings.lock().map_err(error)?;
+        (
+            settings
+                .values()
+                .parakeet_model
+                .clone()
+                .unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
+            credentials.stt_language.unwrap_or_else(|| "auto".into()),
+        )
+    };
+    let transcription = state.transcription.clone();
+    let meeting_state = state.meeting.clone();
+    let transcription_app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        transcription.start_local(
+            &transcription_app,
             input_device,
             output_device,
             crate::transcription::provider::TranscriptionConfig {
-                model: settings
-                    .values()
-                    .parakeet_model
-                    .clone()
-                    .unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
-                language: credentials.stt_language.unwrap_or_else(|| "auto".into()),
+                model,
+                language,
                 source: crate::transcription::provider::AudioSource::Microphone,
             },
-            state.meeting.clone(),
+            meeting_state,
         )
-        .map_err(error)?;
-    meeting.active = true;
-    meeting.transcript.clear();
+    })
+    .await
+    .map_err(error)?
+    .map_err(error)?;
+    {
+        let mut meeting = state.meeting.lock().map_err(error)?;
+        meeting.active = true;
+        meeting.transcript.clear();
+    }
     app.emit("meeting-state-changed", json!({ "isActive": true }))
         .map_err(error)?;
     Ok(Success::new())
