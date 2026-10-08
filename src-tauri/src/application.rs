@@ -1,4 +1,3 @@
-use serde_json::{Value, json};
 use tauri::AppHandle;
 
 use crate::command_response::Success;
@@ -33,26 +32,6 @@ pub fn get_log_file_path() -> Option<String> {
 #[tauri::command]
 pub fn open_log_file() -> Success {
     Success::new()
-}
-
-#[tauri::command]
-pub fn extract_emails_from_transcript() -> Vec<String> {
-    vec![]
-}
-
-#[tauri::command]
-pub fn open_mailto() -> Success {
-    Success::new()
-}
-
-#[tauri::command]
-pub fn check_permissions() -> Value {
-    json!({ "microphone": "not-determined", "screen": "not-determined", "platform": std::env::consts::OS })
-}
-
-#[tauri::command]
-pub fn repair_tcc_permissions() -> Value {
-    json!({ "ok": false, "message": "Use macOS System Settings to reset permissions." })
 }
 
 #[tauri::command]

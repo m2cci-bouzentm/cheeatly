@@ -72,11 +72,14 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
     return () => clearTimeout(t);
   }, [isOpen, refreshStatus]);
 
-  const openSystemSettings = () => {
+  const openSystemSettings = async () => {
     if (platform !== 'darwin') return;
-    window.desktopAPI.openExternal(
-      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-    );
+    const permission = scrStatus !== 'granted' ? 'screen' : 'microphone';
+    try {
+      await window.desktopAPI.openPermissionSettings(permission);
+    } catch (error) {
+      console.error('Failed to open System Settings:', error);
+    }
   };
 
   const handleDismiss = () => {

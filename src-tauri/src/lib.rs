@@ -4,6 +4,7 @@ mod command_response;
 mod context;
 mod database;
 mod meetings;
+mod permissions;
 mod screenshots;
 mod settings;
 mod shortcuts;
@@ -99,13 +100,12 @@ pub fn run() {
             application::open_external,
             application::get_open_at_login,
             application::set_open_at_login,
-            application::check_permissions,
-            application::repair_tcc_permissions,
+            permissions::check_permissions,
+            permissions::repair_tcc_permissions,
+            permissions::open_permission_settings,
             application::get_log_file_path,
             application::open_log_file,
             screenshots::take_screenshot,
-            screenshots::get_screenshots,
-            screenshots::delete_screenshot,
             windows::toggle_settings_window,
             windows::close_settings_window,
             windows::open_settings_tab,
@@ -131,8 +131,6 @@ pub fn run() {
             transcription::commands::local_parakeet_download_model,
             assistant::commands::chat_stream_start,
             assistant::commands::chat_stream_abort,
-            application::extract_emails_from_transcript,
-            application::open_mailto
         ])
         .run(tauri::generate_context!())
         .expect("error while building Tauri application");

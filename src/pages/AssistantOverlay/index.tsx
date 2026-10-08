@@ -582,13 +582,10 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     meeting.systemAudioWarning?.kind === 'screen-recording-permission';
 
   const openPermissionPane = (channel: 'mic' | 'system') => {
-    const url = !isMac
-      ? null
-      : channel === 'mic'
-        ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'
-        : 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture';
-    if (url) {
-      window.desktopAPI.openExternal(url);
+    if (isMac) {
+      window.desktopAPI.openPermissionSettings(
+        channel === 'mic' ? 'microphone' : 'screen'
+      );
       return;
     }
     window.desktopAPI.toggleSettingsWindow();

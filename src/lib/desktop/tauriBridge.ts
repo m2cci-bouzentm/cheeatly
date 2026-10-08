@@ -33,8 +33,6 @@ export const desktopAPI: DesktopAPI = {
   updateContentDimensions: (dimensions) =>
     call('update_content_dimensions', { dimensions }),
   takeScreenshot: () => call('take_screenshot'),
-  getScreenshots: () => call('get_screenshots'),
-  deleteScreenshot: (path) => call('delete_screenshot', { path }),
   onScreenshotTaken: (callback) => on('screenshot-taken', callback),
   onCaptureAndProcess: (callback) => on('capture-and-process', callback),
   moveWindowLeft: () => call('move_window_left'),
@@ -189,11 +187,10 @@ export const desktopAPI: DesktopAPI = {
   skillsUpdate: (name, patch) => call('skills_update', { name, patch }),
   skillsRemove: (name) => call('skills_remove', { name }),
   onSkillsChanged: (callback) => on('skills-changed', callback),
+  openPermissionSettings: (permission) =>
+    call('open_permission_settings', { permission }),
   checkPermissions: () => call('check_permissions'),
   flushDatabase: () => call('flush_database'),
-  extractEmailsFromTranscript: (transcript) =>
-    call('extract_emails_from_transcript', { transcript }),
-  openMailto: (params) => call('open_mailto', { params }),
 };
 
 export function installDesktopBridge(): void {

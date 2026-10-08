@@ -5,10 +5,6 @@ export interface DesktopAPI {
   }) => Promise<void>;
   onToggleExpand: (callback: () => void) => () => void;
   getRecognitionLanguages: () => Promise<Record<string, any>>;
-  getScreenshots: () => Promise<Array<{ path: string; preview: string }>>;
-  deleteScreenshot: (
-    path: string
-  ) => Promise<{ success: boolean; error?: string }>;
   onScreenshotTaken: (
     callback: (data: { path: string; preview: string }) => void
   ) => () => void;
@@ -98,6 +94,9 @@ export interface DesktopAPI {
     sttProvider: 'none' | 'local-parakeet';
   }>;
   // Permissions
+  openPermissionSettings: (
+    permission: 'microphone' | 'screen'
+  ) => Promise<void>;
   checkPermissions: () => Promise<{
     microphone: 'granted' | 'denied' | 'not-determined' | 'restricted';
     screen: 'granted' | 'denied' | 'not-determined' | 'restricted';
@@ -291,15 +290,6 @@ export interface DesktopAPI {
 
   // Settings Window
   toggleSettingsWindow: (coords?: { x: number; y: number }) => Promise<void>;
-
-  extractEmailsFromTranscript: (
-    transcript: Array<{ text: string }>
-  ) => Promise<string[]>;
-  openMailto: (params: {
-    to: string;
-    subject: string;
-    body: string;
-  }) => Promise<{ success: boolean; error?: string }>;
 
   // Audio Test
   startAudioTest: (deviceId?: string) => Promise<{ success: boolean }>;

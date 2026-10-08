@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Cheatly needs microphone access to transcribe your voice during meetings.</string>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Cheatly needs Screen Recording access to capture meeting audio from other applications.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Cheatly needs system audio access to transcribe meeting audio.</string>
+</dict>
+</plist>
