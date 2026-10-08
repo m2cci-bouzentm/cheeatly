@@ -4,7 +4,7 @@ use crate::{
     database::Database,
     settings::{CredentialService, SettingsStore},
     shortcuts::ShortcutStore,
-    transcription::TranscriptionSession,
+    transcription::{AudioTestSession, TranscriptionSession},
 };
 
 pub struct AppState {
@@ -14,6 +14,7 @@ pub struct AppState {
     pub credentials: CredentialService,
     pub transcription: TranscriptionSession,
     pub shortcuts: ShortcutStore,
+    pub audio_test: AudioTestSession,
 }
 
 #[derive(Default)]
@@ -42,6 +43,7 @@ impl AppState {
             credentials,
             transcription: TranscriptionSession::new(),
             shortcuts,
+            audio_test: AudioTestSession::new(),
         }
     }
 }

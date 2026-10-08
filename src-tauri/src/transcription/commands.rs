@@ -68,13 +68,19 @@ pub fn get_native_audio_status(state: State<AppState>) -> Value {
 }
 
 #[tauri::command]
-pub fn start_audio_test() -> Success {
-    Success::new()
+pub fn start_audio_test(
+    app: tauri::AppHandle,
+    device_id: Option<String>,
+    state: State<AppState>,
+) -> Result<Success, String> {
+    state.audio_test.start(&app, device_id).map_err(error)?;
+    Ok(Success::new())
 }
 
 #[tauri::command]
-pub fn stop_audio_test() -> Success {
-    Success::new()
+pub fn stop_audio_test(state: State<AppState>) -> Result<Success, String> {
+    state.audio_test.stop().map_err(error)?;
+    Ok(Success::new())
 }
 
 #[tauri::command]
