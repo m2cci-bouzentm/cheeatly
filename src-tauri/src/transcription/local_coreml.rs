@@ -21,13 +21,23 @@ pub struct LocalCoreMlProvider {
 
 impl LocalCoreMlProvider {
     pub fn bundled(app: &AppHandle) -> anyhow::Result<Self> {
-        let binary = app
+        let resource = app
             .path()
-            .resolve("speech-to-text", tauri::path::BaseDirectory::Resource)
-            .or_else(|_| {
-                app.path()
-                    .resolve("speech-to-text", tauri::path::BaseDirectory::Executable)
-            })?;
+            .resolve("speech-to-text", tauri::path::BaseDirectory::Resource)?;
+        let executable = app
+            .path()
+            .resolve("speech-to-text", tauri::path::BaseDirectory::Executable)?;
+        let binary = if resource.is_file() {
+            resource
+        } else if executable.is_file() {
+            executable
+        } else {
+            return Err(anyhow::anyhow!(
+                "speech-to-text sidecar not found at {} or {}",
+                resource.display(),
+                executable.display()
+            ));
+        };
         Ok(Self {
             binary,
             child: None,
