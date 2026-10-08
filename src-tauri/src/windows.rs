@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
@@ -87,22 +87,57 @@ pub fn set_window_mode(app: AppHandle, mode: String, inactive: Option<bool>) -> 
     Ok(())
 }
 #[tauri::command]
-pub fn move_window_left() {}
+pub fn move_window_left(app: AppHandle) -> Result<(), String> {
+    move_window(&app, -40, 0)
+}
 #[tauri::command]
-pub fn move_window_right() {}
+pub fn move_window_right(app: AppHandle) -> Result<(), String> {
+    move_window(&app, 40, 0)
+}
 #[tauri::command]
-pub fn move_window_up() {}
+pub fn move_window_up(app: AppHandle) -> Result<(), String> {
+    move_window(&app, 0, -40)
+}
 #[tauri::command]
-pub fn move_window_down() {}
+pub fn move_window_down(app: AppHandle) -> Result<(), String> {
+    move_window(&app, 0, 40)
+}
 #[tauri::command]
-pub fn set_overlay_opacity(_app: AppHandle, _opacity: f64) {}
+pub fn set_overlay_opacity(app: AppHandle, opacity: f64) -> Result<(), String> {
+    let opacity = opacity.clamp(0.35, 1.0);
+    app.emit("overlay-opacity-changed", opacity).map_err(error)
+}
 #[tauri::command]
-pub fn toggle_settings_window() {}
+pub fn toggle_settings_window(app: AppHandle) -> Result<(), String> {
+    app.emit("open-settings-tab", "general").map_err(error)
+}
 #[tauri::command]
-pub fn close_settings_window() {}
+pub fn close_settings_window(app: AppHandle) -> Result<(), String> {
+    main_window(&app)?
+        .eval("if (location.search === '?window=settings') location.search = ''")
+        .map_err(error)
+}
 #[tauri::command]
-pub fn open_settings_tab() {}
+pub fn open_settings_tab(app: AppHandle, tab: String) -> Result<(), String> {
+    app.emit("open-settings-tab", tab).map_err(error)
+}
 #[tauri::command]
-pub fn toggle_model_selector() {}
+pub fn toggle_model_selector(app: AppHandle) -> Result<(), String> {
+    main_window(&app)?.eval("location.search = location.search === '?window=model-selector' ? '?window=overlay' : '?window=model-selector'").map_err(error)
+}
 #[tauri::command]
-pub fn model_selector_close_if_open() {}
+pub fn model_selector_close_if_open(app: AppHandle) -> Result<(), String> {
+    main_window(&app)?
+        .eval(
+            "if (location.search === '?window=model-selector') location.search = '?window=overlay'",
+        )
+        .map_err(error)
+}
+
+fn move_window(app: &AppHandle, x: i32, y: i32) -> Result<(), String> {
+    let window = main_window(app)?;
+    let position = window.outer_position().map_err(error)?;
+    window
+        .set_position(tauri::PhysicalPosition::new(position.x + x, position.y + y))
+        .map_err(error)
+}

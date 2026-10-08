@@ -3,16 +3,17 @@ use std::sync::{Arc, Mutex};
 use crate::{
     database::Database,
     settings::{CredentialService, SettingsStore},
+    shortcuts::ShortcutStore,
     transcription::TranscriptionSession,
 };
 
-#[derive(Clone)]
 pub struct AppState {
     pub database: Arc<Mutex<Database>>,
     pub settings: Arc<Mutex<SettingsStore>>,
     pub meeting: Arc<Mutex<MeetingState>>,
     pub credentials: CredentialService,
     pub transcription: TranscriptionSession,
+    pub shortcuts: ShortcutStore,
 }
 
 #[derive(Default)]
@@ -32,6 +33,7 @@ impl AppState {
         database: Database,
         settings: SettingsStore,
         credentials: CredentialService,
+        shortcuts: ShortcutStore,
     ) -> Self {
         Self {
             database: Arc::new(Mutex::new(database)),
@@ -39,6 +41,7 @@ impl AppState {
             meeting: Arc::new(Mutex::new(MeetingState::default())),
             credentials,
             transcription: TranscriptionSession::new(),
+            shortcuts,
         }
     }
 }

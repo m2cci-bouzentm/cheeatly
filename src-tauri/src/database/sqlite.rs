@@ -189,6 +189,25 @@ impl Database {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
+    pub fn create_context_file(
+        &self,
+        filename: &str,
+        storage_path: &str,
+    ) -> anyhow::Result<ContextFileRow> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let created_at = Utc::now().to_rfc3339();
+        self.connection.execute(
+            "INSERT INTO File(id, filename, storagePath, attachableType, attachableId, createdAt) VALUES (?1, ?2, ?3, 'context', 'default', ?4)",
+            params![id, filename, storage_path, created_at],
+        )?;
+        Ok(ContextFileRow {
+            id,
+            filename: filename.to_owned(),
+            storage_path: storage_path.to_owned(),
+            created_at,
+        })
+    }
+
     pub fn delete_context_file(&self, id: &str) -> anyhow::Result<Option<String>> {
         let path = self
             .connection
@@ -225,6 +244,40 @@ impl Database {
                 row.get(0)
             })
             .optional()?)
+    }
+
+    pub fn create_skill(&self, name: &str, description: &str, content: &str) -> anyhow::Result<()> {
+        let now = Utc::now().to_rfc3339();
+        self.connection.execute(
+            "INSERT INTO Skill(id, name, description, content, enabled, bundled, createdAt, updatedAt) VALUES (?1, ?2, ?3, ?4, 1, 0, ?5, ?5)",
+            params![uuid::Uuid::new_v4().to_string(), name, description, content, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_skill(
+        &self,
+        name: &str,
+        description: Option<&str>,
+        content: Option<&str>,
+        enabled: Option<bool>,
+    ) -> anyhow::Result<()> {
+        if let Some(description) = description {
+            self.connection.execute(
+                "UPDATE Skill SET description = ?1, updatedAt = ?2 WHERE name = ?3",
+                params![description, Utc::now().to_rfc3339(), name],
+            )?;
+        }
+        if let Some(content) = content {
+            self.connection.execute(
+                "UPDATE Skill SET content = ?1, updatedAt = ?2 WHERE name = ?3",
+                params![content, Utc::now().to_rfc3339(), name],
+            )?;
+        }
+        if let Some(enabled) = enabled {
+            self.toggle_skill(name, enabled)?;
+        }
+        Ok(())
     }
 
     pub fn toggle_skill(&self, name: &str, enabled: bool) -> anyhow::Result<()> {

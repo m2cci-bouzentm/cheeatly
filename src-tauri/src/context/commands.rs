@@ -1,7 +1,8 @@
 use std::fs;
 
 use serde_json::json;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 use crate::{command_response::Success, state::AppState};
 
@@ -61,8 +62,35 @@ pub fn context_delete_file(id: String, state: State<AppState>) -> Result<Success
 }
 
 #[tauri::command]
-pub fn context_upload_file() -> serde_json::Value {
-    json!({ "success": false, "cancelled": true })
+pub fn context_upload_file(
+    app: AppHandle,
+    state: State<AppState>,
+) -> Result<serde_json::Value, String> {
+    let Some(file) = app
+        .dialog()
+        .file()
+        .add_filter("Documents", &["txt", "md", "json", "csv", "xml", "html"])
+        .blocking_pick_file()
+    else {
+        return Ok(json!({ "success": false, "cancelled": true }));
+    };
+    let source = file.into_path().map_err(error)?;
+    let filename = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "Invalid filename".to_string())?;
+    let content = fs::read_to_string(&source).map_err(error)?;
+    let storage = app.path().app_data_dir().map_err(error)?.join("context");
+    fs::create_dir_all(&storage).map_err(error)?;
+    let destination = storage.join(format!("{}-{}", uuid::Uuid::new_v4(), filename));
+    fs::write(&destination, content).map_err(error)?;
+    let file = state
+        .database
+        .lock()
+        .map_err(error)?
+        .create_context_file(filename, destination.to_string_lossy().as_ref())
+        .map_err(error)?;
+    Ok(json!({ "success": true, "file": file }))
 }
 
 #[tauri::command]
