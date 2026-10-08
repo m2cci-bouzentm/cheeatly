@@ -68,7 +68,6 @@ pub async fn start_meeting(
         .and_then(|value| value.pointer("/audio/outputDeviceId"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
-    let credentials = state.credentials.load().map_err(error)?;
     let (model, language) = {
         let settings = state.settings.lock().map_err(error)?;
         (
@@ -77,7 +76,11 @@ pub async fn start_meeting(
                 .parakeet_model
                 .clone()
                 .unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
-            credentials.stt_language.unwrap_or_else(|| "auto".into()),
+            settings
+                .values()
+                .parakeet_language
+                .clone()
+                .unwrap_or_else(|| "auto".into()),
         )
     };
     let transcription = state.transcription.clone();
