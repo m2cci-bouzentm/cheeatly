@@ -162,17 +162,17 @@ fn start(
     let event_app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = event_rx.recv().await {
-            if event.final_result {
-                if let Ok(mut meeting) = meeting.lock() {
-                    meeting.transcript.push(crate::state::TranscriptTurn {
-                        speaker: if event.speaker == "user" {
-                            "Me".into()
-                        } else {
-                            "Them".into()
-                        },
-                        text: event.text.clone(),
-                    });
-                }
+            if event.final_result
+                && let Ok(mut meeting) = meeting.lock()
+            {
+                meeting.transcript.push(crate::state::TranscriptTurn {
+                    speaker: if event.speaker == "user" {
+                        "Me".into()
+                    } else {
+                        "Them".into()
+                    },
+                    text: event.text.clone(),
+                });
             }
             let _ = event_app.emit("native-audio-transcript", event);
         }
