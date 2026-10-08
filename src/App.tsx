@@ -90,13 +90,11 @@ const App: React.FC = () => {
       }
     );
 
-    const removeMeetingsListener = window.desktopAPI.onMeetingsUpdated?.(
-      () => {
-        console.log(
-          '[App.tsx] Meetings updated (processing finished), starting ad delay timer'
-        );
-      }
-    );
+    const removeMeetingsListener = window.desktopAPI.onMeetingsUpdated?.(() => {
+      console.log(
+        '[App.tsx] Meetings updated (processing finished), starting ad delay timer'
+      );
+    });
 
     return () => {
       if (removeMeetingsListener) removeMeetingsListener();
@@ -118,10 +116,7 @@ const App: React.FC = () => {
 
   const handleStartMeeting = async () => {
     try {
-      localStorage.setItem(
-        'cheatly_last_meeting_start',
-        Date.now().toString()
-      );
+      localStorage.setItem('cheatly_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
       let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
       // Restored/cross-OS localStorage can carry the macOS-only SCK backend onto Windows.
@@ -140,6 +135,7 @@ const App: React.FC = () => {
         audio: { inputDeviceId, outputDeviceId },
       });
       if (result.success) {
+        await window.desktopAPI.setWindowMode('overlay');
         analytics.trackMeetingStarted();
         return;
       }
@@ -152,9 +148,7 @@ const App: React.FC = () => {
   if (isSettingsWindow) {
     return (
       <ErrorBoundary context="SettingsPopup">
-        <div
-          className="h-full min-h-0 w-full"
-        >
+        <div className="h-full min-h-0 w-full">
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <SettingsPopup />
@@ -169,9 +163,7 @@ const App: React.FC = () => {
   if (isModelSelectorWindow) {
     return (
       <ErrorBoundary context="ModelSelector">
-        <div
-          className="h-full min-h-0 w-full overflow-hidden"
-        >
+        <div className="h-full min-h-0 w-full overflow-hidden">
           <QueryClientProvider client={queryClient}>
             <ToastProvider>
               <ModelSelectorWindow />
@@ -199,9 +191,7 @@ const App: React.FC = () => {
                   } as React.CSSProperties
                 }
               >
-                <AssistantOverlay
-                  overlayOpacity={overlayOpacity}
-                />
+                <AssistantOverlay overlayOpacity={overlayOpacity} />
               </div>
               <ToastViewport />
             </ToastProvider>

@@ -2,6 +2,9 @@ use serde::Serialize;
 use std::process::Command;
 
 #[cfg(target_os = "macos")]
+use block2::RcBlock;
+
+#[cfg(target_os = "macos")]
 use core_graphics::access::ScreenCaptureAccess;
 #[cfg(target_os = "macos")]
 use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
@@ -44,6 +47,22 @@ pub fn check_permissions() -> PermissionStatus {
         screen: "granted",
         platform: std::env::consts::OS,
     }
+}
+
+#[tauri::command]
+pub fn request_microphone_permission() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let media_type = unsafe { AVMediaTypeAudio.expect("AVMediaTypeAudio unavailable") };
+        let handler = RcBlock::new(|_granted| {});
+        unsafe {
+            AVCaptureDevice::requestAccessForMediaType_completionHandler(media_type, &handler);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    Ok(())
 }
 
 #[tauri::command]

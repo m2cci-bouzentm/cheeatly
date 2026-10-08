@@ -16,10 +16,6 @@ export interface DesktopAPI {
   moveWindowRight: () => Promise<void>;
   moveWindowUp: () => Promise<void>;
   moveWindowDown: () => Promise<void>;
-  windowMinimize: () => Promise<void>;
-  windowMaximize: () => Promise<void>;
-  windowClose: () => Promise<void>;
-  windowIsMaximized: () => Promise<boolean>;
 
   quitApp: () => Promise<void>;
   toggleWindow: () => Promise<void>;
@@ -30,9 +26,6 @@ export interface DesktopAPI {
   getMeetingActive: () => Promise<boolean>;
   onMeetingStateChanged: (
     callback: (data: { isActive: boolean }) => void
-  ) => () => void;
-  onWindowMaximizedChanged: (
-    callback: (isMaximized: boolean) => void
   ) => () => void;
   onEnsureExpanded: (callback: () => void) => () => void;
   openExternal: (url: string) => Promise<void>;
@@ -97,6 +90,7 @@ export interface DesktopAPI {
   openPermissionSettings: (
     permission: 'microphone' | 'screen'
   ) => Promise<void>;
+  requestMicrophonePermission: () => Promise<void>;
   checkPermissions: () => Promise<{
     microphone: 'granted' | 'denied' | 'not-determined' | 'restricted';
     screen: 'granted' | 'denied' | 'not-determined' | 'restricted';

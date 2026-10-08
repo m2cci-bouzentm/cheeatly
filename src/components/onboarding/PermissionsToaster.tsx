@@ -76,6 +76,10 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
     if (platform !== 'darwin') return;
     const permission = scrStatus !== 'granted' ? 'screen' : 'microphone';
     try {
+      if (permission === 'microphone' && micStatus === 'not-determined') {
+        await window.desktopAPI.requestMicrophonePermission();
+        return;
+      }
       await window.desktopAPI.openPermissionSettings(permission);
     } catch (error) {
       console.error('Failed to open System Settings:', error);
@@ -143,6 +147,7 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                 variant="ghost"
                 size="icon-sm"
                 onClick={handleDismiss}
+                data-testid="permissions-dismiss"
                 aria-label="Dismiss"
                 className={`absolute top-4 right-4 z-10 w-[26px] h-[26px] rounded-full bg-transparent border-none opacity-40 hover:opacity-80 transition-opacity ${
                   isLight ? 'hover:bg-black/[0.06]' : 'hover:bg-white/[0.08]'

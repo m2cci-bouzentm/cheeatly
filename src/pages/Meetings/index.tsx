@@ -361,6 +361,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                         onStartMeeting();
                         analytics.trackCommandExecuted('start_cheatly_cta');
                       }}
+                      data-testid="start-meeting"
                       whileHover={{ scale: 1.01, filter: 'brightness(1.1)' }}
                       whileTap={{ scale: 0.99 }}
                       transition={{ duration: 0.18, ease: 'easeOut' }}

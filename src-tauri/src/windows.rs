@@ -24,31 +24,6 @@ pub fn update_content_dimensions(app: AppHandle, dimensions: Dimensions) -> Resu
 }
 
 #[tauri::command]
-pub fn window_minimize(app: AppHandle) -> Result<(), String> {
-    main_window(&app)?.minimize().map_err(error)
-}
-
-#[tauri::command]
-pub fn window_maximize(app: AppHandle) -> Result<(), String> {
-    let window = main_window(&app)?;
-    if window.is_maximized().map_err(error)? {
-        window.unmaximize().map_err(error)
-    } else {
-        window.maximize().map_err(error)
-    }
-}
-
-#[tauri::command]
-pub fn window_close(app: AppHandle) -> Result<(), String> {
-    main_window(&app)?.hide().map_err(error)
-}
-
-#[tauri::command]
-pub fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
-    main_window(&app)?.is_maximized().map_err(error)
-}
-
-#[tauri::command]
 pub fn show_window(app: AppHandle, _inactive: Option<bool>) -> Result<(), String> {
     let window = main_window(&app)?;
     window.show().map_err(error)?;
@@ -82,7 +57,35 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn set_window_mode(_mode: String, _inactive: Option<bool>) {}
+pub fn set_window_mode(app: AppHandle, mode: String, inactive: Option<bool>) -> Result<(), String> {
+    let window = main_window(&app)?;
+    match mode.as_str() {
+        "launcher" => {
+            window
+                .set_size(tauri::LogicalSize::new(900.0, 680.0))
+                .map_err(error)?;
+            window.set_resizable(true).map_err(error)?;
+            window
+                .eval("if (location.search !== '') location.search = ''")
+                .map_err(error)?;
+        }
+        "overlay" => {
+            window
+                .set_size(tauri::LogicalSize::new(520.0, 240.0))
+                .map_err(error)?;
+            window.set_resizable(false).map_err(error)?;
+            window
+                .eval("if (location.search !== '?window=overlay') location.search = '?window=overlay'")
+                .map_err(error)?;
+        }
+        _ => return Err("Unsupported window mode".into()),
+    }
+    window.show().map_err(error)?;
+    if inactive != Some(true) {
+        window.set_focus().map_err(error)?;
+    }
+    Ok(())
+}
 #[tauri::command]
 pub fn move_window_left() {}
 #[tauri::command]

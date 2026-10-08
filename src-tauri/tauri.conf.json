@@ -19,7 +19,9 @@
         "resizable": true,
         "fullscreen": false,
         "transparent": true,
-        "decorations": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
         "alwaysOnTop": true,
         "visibleOnAllWorkspaces": true
       }
@@ -31,9 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/speech-to-text"
-    ],
+    "externalBin": ["binaries/speech-to-text"],
     "resources": {
       "resources/prompts": "prompts",
       "resources/skills": "skills"

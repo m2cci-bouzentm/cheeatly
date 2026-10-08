@@ -40,6 +40,7 @@ export const e2eDesktopAPI = new Proxy(
     getOpenAtLogin: async () => false,
     getVerboseLogging: async () => false,
     openPermissionSettings: async () => undefined,
+    requestMicrophonePermission: async () => undefined,
     checkPermissions: async () => ({
       microphone: 'granted',
       screen: 'granted',

@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  ArrowRight,
-  ArrowLeft,
-  Settings,
-  Search,
-} from 'lucide-react';
-import { isMac } from '../../../utils/platformUtils';
-import WindowControls from './WindowControls';
+import { ArrowRight, ArrowLeft, Settings, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Meeting } from '../types';
 
@@ -29,11 +22,10 @@ const LauncherHeader: React.FC<LauncherHeaderProps> = ({
 }) => {
   return (
     <header
-      className={`relative w-full h-[40px] shrink-0 flex items-center justify-between px-2 drag-region select-none ${isLight ? 'bg-bg-primary' : 'bg-[#0a0a0a]'} border-b border-white/5 z-[200]`}
+      data-tauri-drag-region
+      className={`relative w-full h-[40px] shrink-0 flex items-center justify-between pl-[78px] pr-2 select-none ${isLight ? 'bg-bg-primary' : 'bg-[#0a0a0a]'} border-b border-white/5 z-[200]`}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        {isMac && <div className="w-[70px] shrink-0" />}
-
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -84,7 +76,6 @@ const LauncherHeader: React.FC<LauncherHeaderProps> = ({
         >
           <Settings size={14} />
         </Button>
-        {!isMac && <WindowControls />}
       </div>
     </header>
   );

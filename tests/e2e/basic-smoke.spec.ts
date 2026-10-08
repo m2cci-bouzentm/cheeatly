@@ -59,7 +59,11 @@ test.describe('Cheatly Tauri renderer smoke', () => {
     await page.goto(APP_URL);
     await page.waitForLoadState('networkidle');
 
-    // Click the settings button/icon — placeholder selector.
+    const dismissPermissions = page.getByRole('button', { name: 'Dismiss' });
+    if (await dismissPermissions.isVisible().catch(() => false)) {
+      await dismissPermissions.click();
+    }
+
     const settingsBtn = page
       .locator('button[aria-label*="settings" i], button:has-text("Settings")')
       .first();

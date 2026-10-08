@@ -39,18 +39,12 @@ export const desktopAPI: DesktopAPI = {
   moveWindowRight: () => call('move_window_right'),
   moveWindowUp: () => call('move_window_up'),
   moveWindowDown: () => call('move_window_down'),
-  windowMinimize: () => call('window_minimize'),
-  windowMaximize: () => call('window_maximize'),
-  windowClose: () => call('window_close'),
-  windowIsMaximized: () => call('window_is_maximized'),
   quitApp: () => call('quit_app'),
   toggleWindow: () => call('toggle_window'),
   showWindow: (inactive) => call('show_window', { inactive }),
   hideWindow: () => call('hide_window'),
   showOverlay: () => call('show_overlay'),
   hideOverlay: () => call('hide_overlay'),
-  onWindowMaximizedChanged: (callback) =>
-    on('window-maximized-changed', callback),
   onEnsureExpanded: (callback) => on('ensure-expanded', callback),
   openExternal: (url) => call('open_external', { url }),
   repairTccPermissions: () => call('repair_tcc_permissions'),
@@ -189,6 +183,7 @@ export const desktopAPI: DesktopAPI = {
   onSkillsChanged: (callback) => on('skills-changed', callback),
   openPermissionSettings: (permission) =>
     call('open_permission_settings', { permission }),
+  requestMicrophonePermission: () => call('request_microphone_permission'),
   checkPermissions: () => call('check_permissions'),
   flushDatabase: () => call('flush_database'),
 };
