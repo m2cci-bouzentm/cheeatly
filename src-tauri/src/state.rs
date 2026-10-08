@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     database::Database,
     settings::{CredentialService, SettingsStore},
+    transcription::TranscriptionSession,
 };
 
 #[derive(Clone)]
@@ -11,6 +12,7 @@ pub struct AppState {
     pub settings: Arc<Mutex<SettingsStore>>,
     pub meeting: Arc<Mutex<MeetingState>>,
     pub credentials: CredentialService,
+    pub transcription: TranscriptionSession,
 }
 
 #[derive(Default)]
@@ -36,6 +38,7 @@ impl AppState {
             settings: Arc::new(Mutex::new(settings)),
             meeting: Arc::new(Mutex::new(MeetingState::default())),
             credentials,
+            transcription: TranscriptionSession::new(),
         }
     }
 }

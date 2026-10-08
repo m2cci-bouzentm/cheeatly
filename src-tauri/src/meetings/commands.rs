@@ -53,12 +53,34 @@ pub fn get_meeting_active(state: State<AppState>) -> Result<bool, String> {
 pub fn start_meeting(
     app: AppHandle,
     state: State<AppState>,
-    _metadata: Option<Value>,
+    metadata: Option<Value>,
 ) -> Result<Success, String> {
     let mut meeting = state.meeting.lock().map_err(error)?;
     if meeting.active {
         return Err("A meeting is already active".into());
     }
+    let input_device = metadata
+        .as_ref()
+        .and_then(|value| value.pointer("/audio/inputDeviceId"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let credentials = state.credentials.load().map_err(error)?;
+    let settings = state.settings.lock().map_err(error)?;
+    state
+        .transcription
+        .start_local(
+            &app,
+            input_device,
+            crate::transcription::provider::TranscriptionConfig {
+                model: settings
+                    .values()
+                    .parakeet_model
+                    .clone()
+                    .unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
+                language: credentials.stt_language.unwrap_or_else(|| "auto".into()),
+            },
+        )
+        .map_err(error)?;
     meeting.active = true;
     meeting.transcript.clear();
     app.emit("meeting-state-changed", json!({ "isActive": true }))
@@ -68,6 +90,7 @@ pub fn start_meeting(
 
 #[tauri::command]
 pub fn abort_meeting(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    state.transcription.stop().map_err(error)?;
     let mut meeting = state.meeting.lock().map_err(error)?;
     meeting.active = false;
     meeting.transcript.clear();
@@ -77,6 +100,7 @@ pub fn abort_meeting(app: AppHandle, state: State<AppState>) -> Result<(), Strin
 
 #[tauri::command]
 pub fn end_meeting(app: AppHandle, state: State<AppState>) -> Result<Success, String> {
+    state.transcription.stop().map_err(error)?;
     let transcript = {
         let mut meeting = state.meeting.lock().map_err(error)?;
         meeting.active = false;

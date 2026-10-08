@@ -18,10 +18,12 @@ tauri-build = { version = "2.7.1", features = [] }
 anyhow = "1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
+cheatly-audio = { path = "../crates/cheatly-audio" }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = "0.4"
 open = "5"
 reqwest = { version = "0.12", features = ["json", "stream"] }
+ringbuf = "0.4"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

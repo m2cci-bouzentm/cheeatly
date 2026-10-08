@@ -1,3 +1,4 @@
+use serde::Serialize;
 use serde_json::{Value, json};
 use tauri::State;
 
@@ -7,14 +8,34 @@ fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-#[tauri::command]
-pub fn get_input_devices() -> Vec<Value> {
-    vec![]
+#[derive(Serialize)]
+pub struct AudioDevice {
+    id: String,
+    name: String,
 }
 
 #[tauri::command]
-pub fn get_output_devices() -> Vec<Value> {
-    vec![]
+pub fn get_input_devices() -> Result<Vec<AudioDevice>, String> {
+    cheatly_audio::microphone::list_input_devices()
+        .map(|devices| {
+            devices
+                .into_iter()
+                .map(|(id, name)| AudioDevice { id, name })
+                .collect()
+        })
+        .map_err(error)
+}
+
+#[tauri::command]
+pub fn get_output_devices() -> Result<Vec<AudioDevice>, String> {
+    cheatly_audio::speaker::list_output_devices()
+        .map(|devices| {
+            devices
+                .into_iter()
+                .map(|(id, name)| AudioDevice { id, name })
+                .collect()
+        })
+        .map_err(error)
 }
 
 #[tauri::command]
@@ -28,8 +49,8 @@ pub fn set_channel_muted() -> Success {
 }
 
 #[tauri::command]
-pub fn get_native_audio_status() -> Value {
-    json!({ "connected": false })
+pub fn get_native_audio_status(state: State<AppState>) -> Value {
+    json!({ "connected": state.transcription.active() })
 }
 
 #[tauri::command]
