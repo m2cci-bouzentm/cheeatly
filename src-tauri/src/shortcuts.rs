@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, path::PathBuf, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +69,28 @@ impl ShortcutStore {
         self.save(&values)?;
         Ok(true)
     }
+    pub fn register(&self, app: &AppHandle) -> Result<(), String> {
+        app.global_shortcut()
+            .unregister_all()
+            .map_err(|error| error.to_string())?;
+        for keybind in self
+            .list()?
+            .into_iter()
+            .filter(|keybind| keybind.is_global && !keybind.accelerator.is_empty())
+        {
+            let action = keybind.id.clone();
+            app.global_shortcut()
+                .on_shortcut(keybind.accelerator.as_str(), move |app, _, event| {
+                    if event.state == ShortcutState::Pressed {
+                        let _ =
+                            app.emit("global-shortcut", serde_json::json!({ "action": action }));
+                    }
+                })
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
     pub fn reset(&self) -> Result<Vec<Keybind>, String> {
         let values = defaults()
             .into_iter()
@@ -91,6 +114,7 @@ pub fn set_keybind(
     state: tauri::State<crate::state::AppState>,
 ) -> Result<bool, String> {
     let result = state.shortcuts.set(&id, accelerator)?;
+    state.shortcuts.register(&app)?;
     app.emit("keybinds-update", state.shortcuts.list()?)
         .map_err(|error| error.to_string())?;
     Ok(result)
@@ -101,6 +125,7 @@ pub fn reset_keybinds(
     state: tauri::State<crate::state::AppState>,
 ) -> Result<Vec<Keybind>, String> {
     let values = state.shortcuts.reset()?;
+    state.shortcuts.register(&app)?;
     app.emit("keybinds-update", &values)
         .map_err(|error| error.to_string())?;
     Ok(values)
