@@ -1,7 +1,7 @@
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 
-const SERVICE: &str = "com.cheatly.assistant";
+const SERVICE: &str = "com.cheatly.assistant.tauri";
 const ACCOUNT: &str = "credentials";
 
 #[derive(Clone, Default, Deserialize, Serialize)]
