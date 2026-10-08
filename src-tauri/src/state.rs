@@ -1,4 +1,8 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     database::Database,
@@ -15,6 +19,7 @@ pub struct AppState {
     pub transcription: TranscriptionSession,
     pub shortcuts: ShortcutStore,
     pub audio_test: AudioTestSession,
+    pub chat_requests: Mutex<HashMap<String, CancellationToken>>,
 }
 
 #[derive(Default)]
@@ -44,6 +49,7 @@ impl AppState {
             transcription: TranscriptionSession::new(),
             shortcuts,
             audio_test: AudioTestSession::new(),
+            chat_requests: Mutex::new(HashMap::new()),
         }
     }
 }

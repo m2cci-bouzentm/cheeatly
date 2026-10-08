@@ -71,7 +71,22 @@ pub async fn chat_stream_start(
         .unwrap_or_else(|| include_str!("../../resources/prompts/system.md").into());
     request_messages.push(json!({"role":"system","content":system}));
     request_messages.extend(messages.into_iter().filter_map(normalize_message));
-    match complete(&state, request_messages).await {
+    let cancellation = tokio_util::sync::CancellationToken::new();
+    state
+        .chat_requests
+        .lock()
+        .map_err(error)?
+        .insert(stream_id.clone(), cancellation.clone());
+    let result = tokio::select! {
+        result = complete(&state, request_messages) => result,
+        _ = cancellation.cancelled() => Err("aborted".into()),
+    };
+    state
+        .chat_requests
+        .lock()
+        .map_err(error)?
+        .remove(&stream_id);
+    match result {
         Ok(text) => {
             let id = uuid::Uuid::new_v4().to_string();
             for chunk in [
@@ -98,7 +113,17 @@ pub async fn chat_stream_start(
 }
 
 #[tauri::command]
-pub fn chat_stream_abort() {}
+pub fn chat_stream_abort(stream_id: String, state: State<AppState>) -> Result<(), String> {
+    if let Some(cancellation) = state
+        .chat_requests
+        .lock()
+        .map_err(error)?
+        .remove(&stream_id)
+    {
+        cancellation.cancel();
+    }
+    Ok(())
+}
 
 async fn complete(state: &State<'_, AppState>, messages: Vec<Value>) -> Result<String, String> {
     let credentials = state.credentials.load().map_err(error)?;
