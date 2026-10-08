@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::{repositories::SkillRow, state::AppState};
+use crate::{database::SkillRow, state::AppState};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()

@@ -1,15 +1,15 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
-use crate::{repositories::Database, state::AppState};
+use crate::{command_response::Success, database::Database, state::AppState};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-fn map_meeting(row: crate::repositories::MeetingRow) -> Value {
+fn map_meeting(row: crate::database::MeetingRow) -> Value {
     let transcript = row
         .transcript
         .unwrap_or_default()
@@ -44,11 +44,6 @@ pub struct SummaryUpdates {
     pub overview: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct Success {
-    pub success: bool,
-}
-
 #[tauri::command]
 pub fn get_meeting_active(state: State<AppState>) -> Result<bool, String> {
     Ok(state.meeting.lock().map_err(error)?.active)
@@ -68,7 +63,7 @@ pub fn start_meeting(
     meeting.transcript.clear();
     app.emit("meeting-state-changed", json!({ "isActive": true }))
         .map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -105,7 +100,7 @@ pub fn end_meeting(app: AppHandle, state: State<AppState>) -> Result<Success, St
     }
     app.emit("meeting-state-changed", json!({ "isActive": false }))
         .map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -182,12 +177,12 @@ pub fn delete_meeting(app: AppHandle, id: String, state: State<AppState>) -> Res
 
 #[tauri::command]
 pub fn retry_meeting_summary(_id: String) -> Success {
-    Success { success: true }
+    Success::new()
 }
 
 #[tauri::command]
 pub fn flush_database() -> Success {
-    Success { success: true }
+    Success::new()
 }
 
 #[allow(dead_code)]

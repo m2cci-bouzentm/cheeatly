@@ -3,7 +3,7 @@
 // Bug: The large useEffect at ~L1434 in src/components/CheatlyInterface.tsx
 // registered IPC subscriptions and previously declared `[isExpanded]` as its
 // dep array. The audio subscription logic now lives in
-// renderer/hooks/meeting/useMeetingState.ts. Every expand or collapse toggle
+// src/hooks/meeting/useMeetingState.ts. Every expand or collapse toggle
 // must not:
 //   1. Run the cleanup forEach, removing audio IPC listeners.
 //   2. Re-run the effect body, re-registering audio IPC listeners.
@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const filePath = path.resolve(
   __dirname,
-  '../../../renderer/hooks/meeting/useMeetingState.ts'
+  '../../../src/hooks/meeting/useMeetingState.ts'
 );
 
 const source = readFileSync(filePath, 'utf8');

@@ -1,5 +1,7 @@
+pub mod commands;
 mod credentials;
-mod settings;
+pub mod providers;
+mod store;
 
 pub use credentials::{CredentialService, StoredCredentials};
-pub use settings::SettingsService;
+pub use store::SettingsStore;

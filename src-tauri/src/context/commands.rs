@@ -3,7 +3,7 @@ use std::fs;
 use serde_json::json;
 use tauri::State;
 
-use crate::{commands::Success, state::AppState};
+use crate::{command_response::Success, state::AppState};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
@@ -32,7 +32,7 @@ pub fn context_save_description(
         .map_err(error)?
         .save_context_description(&content)
         .map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -57,7 +57,7 @@ pub fn context_delete_file(id: String, state: State<AppState>) -> Result<Success
     {
         let _ = fs::remove_file(path);
     }
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -72,5 +72,5 @@ pub fn get_intelligence_context() -> serde_json::Value {
 
 #[tauri::command]
 pub fn reset_intelligence() -> Success {
-    Success { success: true }
+    Success::new()
 }

@@ -13,10 +13,15 @@ pub struct StoredCredentials {
     pub stt_language: Option<String>,
 }
 
+#[derive(Clone, Default)]
 pub struct CredentialService;
 
 impl CredentialService {
-    pub fn load() -> anyhow::Result<StoredCredentials> {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn load(&self) -> anyhow::Result<StoredCredentials> {
         let entry = Entry::new(SERVICE, ACCOUNT)?;
         match entry.get_password() {
             Ok(value) => Ok(serde_json::from_str(&value)?),
@@ -25,7 +30,7 @@ impl CredentialService {
         }
     }
 
-    pub fn save(credentials: &StoredCredentials) -> anyhow::Result<()> {
+    pub fn save(&self, credentials: &StoredCredentials) -> anyhow::Result<()> {
         Entry::new(SERVICE, ACCOUNT)?.set_password(&serde_json::to_string(credentials)?)?;
         Ok(())
     }

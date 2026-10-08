@@ -17,12 +17,12 @@ pub struct AppSettings {
     pub question_analysis_window: Option<u32>,
 }
 
-pub struct SettingsService {
+pub struct SettingsStore {
     path: PathBuf,
     values: AppSettings,
 }
 
-impl SettingsService {
+impl SettingsStore {
     pub fn load(path: PathBuf) -> anyhow::Result<Self> {
         let values = if path.exists() {
             serde_json::from_slice(&fs::read(&path)?)

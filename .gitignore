@@ -19,8 +19,6 @@ env
 *.log
 /Users/evin/natively-cluely-ai-assistant/natively
 natively
-!renderer/components/natively/
-!renderer/components/natively/**
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

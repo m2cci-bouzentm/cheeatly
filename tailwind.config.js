@@ -1,6 +1,6 @@
 module.exports = {
   content: [
-    './renderer/**/*.{js,jsx,ts,tsx}',
+    './src/**/*.{js,jsx,ts,tsx}',
     './premium/renderer/**/*.{js,jsx,ts,tsx}',
   ],
   theme: {

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::{commands::Success, state::AppState};
+use crate::{command_response::Success, state::AppState};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
@@ -80,7 +80,7 @@ pub fn set_disguise(
         .update(|settings| settings.disguise_mode = Some(mode.clone()))
         .map_err(error)?;
     app.emit("disguise-changed", mode).map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -102,7 +102,7 @@ pub fn set_verbose_logging(state: State<AppState>, enabled: bool) -> Result<Succ
         .map_err(error)?
         .update(|settings| settings.verbose_logging = Some(enabled))
         .map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]
@@ -152,7 +152,7 @@ pub fn set_question_analysis_config(
         json!({ "enabled": current.enabled, "interval": current.interval }),
     )
     .map_err(error)?;
-    Ok(Success { success: true })
+    Ok(Success::new())
 }
 
 #[tauri::command]

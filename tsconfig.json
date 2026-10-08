@@ -15,11 +15,11 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./renderer/*"],
-      "@hooks/*": ["./renderer/hooks/*"],
-      "@config/*": ["./renderer/config/*"]
+      "@/*": ["./src/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@config/*": ["./src/config/*"]
     }
   },
-  "include": ["renderer", "premium/renderer"],
+  "include": ["src", "premium/renderer"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
