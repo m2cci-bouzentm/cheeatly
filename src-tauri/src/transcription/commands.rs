@@ -84,12 +84,24 @@ pub fn stop_audio_test(state: State<AppState>) -> Result<Success, String> {
 }
 
 #[tauri::command]
-pub fn local_parakeet_get_config(state: State<AppState>) -> Result<Value, String> {
+pub fn local_parakeet_get_config(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+) -> Result<Value, String> {
     let settings = state.settings.lock().map_err(error)?;
+    let binary = app
+        .path()
+        .resolve("speech-to-text", tauri::path::BaseDirectory::Executable)
+        .map_err(error)?;
+    let output = std::process::Command::new(binary)
+        .arg("list-models")
+        .output()
+        .map_err(error)?;
+    let models: Value = serde_json::from_slice(&output.stdout).map_err(error)?;
     Ok(json!({
         "modelId": settings.values().parakeet_model.clone().unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
         "language": settings.values().parakeet_language.clone().unwrap_or_else(|| "auto".into()),
-        "models": []
+        "models": models
     }))
 }
 

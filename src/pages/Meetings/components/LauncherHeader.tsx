@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ArrowRight, ArrowLeft, Settings, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Meeting } from '../types';
@@ -24,6 +25,18 @@ const LauncherHeader: React.FC<LauncherHeaderProps> = ({
     <header
       data-tauri-drag-region
       className={`relative w-full h-[40px] shrink-0 flex items-center justify-between pl-[78px] pr-2 select-none ${isLight ? 'bg-bg-primary' : 'bg-[#0a0a0a]'} border-b border-white/5 z-[200]`}
+      onMouseDown={(event) => {
+        if (event.button !== 0) return;
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            'button, input, select, textarea, a, [role="button"], .no-drag'
+          )
+        )
+          return;
+        event.preventDefault();
+        void getCurrentWindow().startDragging();
+      }}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div className="flex items-center gap-1">
