@@ -12,7 +12,7 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'electron-chrome',
+      name: 'tauri-webview',
       use: {
         ...devices['Desktop Chrome'],
         channel: undefined,
@@ -20,7 +20,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: 'VITE_E2E=true npm run dev -- --strictPort',
     url: 'http://localhost:5180',
     reuseExistingServer: true,
     timeout: 60_000,

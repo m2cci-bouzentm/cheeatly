@@ -77,8 +77,6 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
-dist-main/
-dist-electron/
 dist/
 
 # Snowpack dependency directory (https://snowpack.dev/)
@@ -196,8 +194,6 @@ release/
 
 # Rust
 target/
-platform-bridge/target/
-platform-bridge/*.node
 src-tauri/binaries/speech-to-text-*
 
 .github/RepoGuide.md
@@ -283,7 +279,6 @@ INTELLIGENCE_LATENCY_REPORT.md
 INTELLIGENCE_MANUAL_TESTS.md
 INTELLIGENCE_COST_REPORT.md
 INTELLIGENCE_FIX_REPORT.md
-electron-builder.signed.cjs
 ANSWER_QUALITY_EVAL_REPORT.md
 tempp
 negotiation-routing-eval
@@ -305,4 +300,3 @@ WHAT_TO_ANSWER_FIX_REPORT.md
 benchmarks/profile-intelligence/
 intelligence-eval-routing-200
 .env.e2e
-playwright-report-electron/*

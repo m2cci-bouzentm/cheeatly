@@ -35,8 +35,8 @@
       "binaries/speech-to-text"
     ],
     "resources": {
-      "../core/resources/prompts": "prompts",
-      "../core/resources/skills": "skills"
+      "resources/prompts": "prompts",
+      "resources/skills": "skills"
     },
     "icon": [
       "icons/32x32.png",

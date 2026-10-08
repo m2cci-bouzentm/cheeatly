@@ -2,43 +2,15 @@
 //
 // FINDING-006: Playwright E2E smoke tests for Cheatly.
 //
-// This file exercises the renderer → main-process IPC contract that
-// service-level tests cannot cover. Each test opens the actual Electron
-// window and asserts on real UI state.
-//
-// Skip conditions (each test is skip_if'd individually so one failure
-// doesn't cascade):
-//   - ELECTRON_APP_PORT not set  → dev server not running
-//   - CI=true                   → no display available in CI containers
-//
-// To run locally against the dev server:
-//   npm run dev  (in terminal 1)
-//   npx playwright test  (in terminal 2, from repo root)
-//
-// To run headless against a built app:
-//   npm run build && npm run start &
-//   sleep 5 && npx playwright test
+// Exercises renderer behaviour against framework-neutral desktop API contract.
+// Playwright serves renderer with deterministic E2E bridge. Rust command and
+// repository behaviour is covered by cargo tests.
 
-import { test, expect, skip } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
-const CI = process.env.CI === 'true';
-const APP_PORT = parseInt(process.env.ELECTRON_APP_PORT ?? '0', 10);
+const APP_URL = 'http://localhost:5180';
 
-test.describe('FINDING-006: Cheatly E2E smoke', () => {
-  test.beforeEach(async ({ page }) => {
-    if (CI) {
-      test.skip();
-      return;
-    }
-    // Guard: if no dev server is running, skip instead of failing
-    if (!APP_PORT) {
-      test.skip(
-        'Set ELECTRON_APP_PORT to the dev server port (e.g. 5173) before running E2E tests'
-      );
-      return;
-    }
-  });
-
+test.describe('Cheatly Tauri renderer smoke', () => {
   test('app window loads without crash', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -46,7 +18,7 @@ test.describe('FINDING-006: Cheatly E2E smoke', () => {
       if (m.type() === 'error') errors.push(m.text());
     });
 
-    await page.goto(`http://localhost:${APP_PORT}`);
+    await page.goto(APP_URL);
     // Wait for the main content area — exact selector is app-specific.
     // We wait for any element with the "app" or "root" identifier.
     await page.waitForLoadState('networkidle');
@@ -66,27 +38,25 @@ test.describe('FINDING-006: Cheatly E2E smoke', () => {
     ).toHaveLength(0);
   });
 
-  test('main IPC channel responds to ping', async ({ page }) => {
-    if (!APP_PORT) test.skip();
-    await page.goto(`http://localhost:${APP_PORT}`);
+  test('desktop bridge exposes Tauri contract', async ({ page }) => {
+    await page.goto(APP_URL);
     await page.waitForLoadState('networkidle');
 
-    // Evaluate a ping through the preload bridge (exposed as window.electronAPI).
-    // If the preload is loaded, window.electronAPI will be truthy.
-    const hasPreload = await page.evaluate(() => {
-      return (
-        typeof (window as any).electronAPI?.ping === 'function' ||
-        typeof (window as any).electron === 'object'
-      );
-    });
+    const bridge = await page.evaluate(() => ({
+      platform: (window as any).desktopAPI?.platform,
+      startMeeting: typeof (window as any).desktopAPI?.startMeeting,
+      getRecentMeetings: typeof (window as any).desktopAPI?.getRecentMeetings,
+      electronAPI: typeof (window as any).electronAPI,
+    }));
 
-    // A missing preload is a failure — the IPC contract is broken.
-    expect(hasPreload).toBe(true);
+    expect(bridge.platform).toBe('darwin');
+    expect(bridge.startMeeting).toBe('function');
+    expect(bridge.getRecentMeetings).toBe('function');
+    expect(bridge.electronAPI).toBe('undefined');
   });
 
   test('settings panel opens and closes', async ({ page }) => {
-    if (!APP_PORT) test.skip();
-    await page.goto(`http://localhost:${APP_PORT}`);
+    await page.goto(APP_URL);
     await page.waitForLoadState('networkidle');
 
     // Click the settings button/icon — placeholder selector.
@@ -95,7 +65,10 @@ test.describe('FINDING-006: Cheatly E2E smoke', () => {
       .first();
     const settingsVisible = await settingsBtn.isVisible().catch(() => false);
 
-    if (!settingsVisible) return;
+    if (!settingsVisible) {
+      test.skip(true, 'Settings button not found in this UI layout');
+      return;
+    }
     await settingsBtn.click();
     await page.waitForTimeout(500);
 
@@ -104,10 +77,5 @@ test.describe('FINDING-006: Cheatly E2E smoke', () => {
       .locator('button[aria-label*="close" i], button:has-text("Close")')
       .first();
     if (await closeBtn.isVisible()) await closeBtn.click();
-
-    // Settings not yet rendered is not a test failure — skip with a note
-    if (!settingsVisible) {
-      test.skip('Settings button not found in this UI layout');
-    }
   });
 });

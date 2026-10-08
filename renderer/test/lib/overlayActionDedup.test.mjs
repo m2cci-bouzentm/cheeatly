@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  collapseConsecutiveDuplicateSystemMessages,
+  collapseConsecutiveDuplicateAssistantMessages,
   shouldDedupeOverlayAction,
 } from '../../lib/overlayActionDedup.ts';
 
@@ -68,48 +68,65 @@ describe('overlayActionDedup', () => {
     );
   });
 
-  test('collapseConsecutiveDuplicateSystemMessages removes adjacent duplicates', () => {
+  test('collapseConsecutiveDuplicateAssistantMessages removes adjacent duplicates', () => {
     const input = [
-      { id: '1', role: 'system', text: 'Same clarify?', intent: 'clarify' },
-      { id: '2', role: 'system', text: 'Same clarify?', intent: 'clarify' },
-      { id: '3', role: 'user', text: 'hello' },
-      { id: '4', role: 'system', text: 'Same clarify?', intent: 'clarify' },
+      {
+        id: '1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Same clarify?' }],
+      },
+      {
+        id: '2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Same clarify?' }],
+      },
+      { id: '3', role: 'user', parts: [{ type: 'text', text: 'hello' }] },
+      {
+        id: '4',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Same clarify?' }],
+      },
     ];
-    const out = collapseConsecutiveDuplicateSystemMessages(input);
+    const out = collapseConsecutiveDuplicateAssistantMessages(
+      input,
+      (message) => message.parts[0]?.text ?? ''
+    );
     assert.equal(out.length, 3);
     assert.equal(out[0].id, '1');
     assert.equal(out[1].id, '3');
     assert.equal(out[2].id, '4');
   });
 
-  test('collapseConsecutiveDuplicateSystemMessages keeps non-adjacent duplicate chat answers', () => {
+  test('collapseConsecutiveDuplicateAssistantMessages keeps non-adjacent answers', () => {
     const duplicateText =
       'You should mention your leadership on the migration project.';
     const input = [
       {
         id: 'w1',
-        role: 'system',
-        text: duplicateText,
-        intent: 'chat',
+        role: 'assistant',
+        parts: [{ type: 'text', text: duplicateText }],
       },
-      { id: 'u1', role: 'user', text: 'What?' },
+      { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'What?' }] },
       {
         id: 'c1',
-        role: 'system',
-        text: 'Let me help with that.',
-        intent: 'clarify',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Let me help with that.' }],
       },
       {
         id: 'w2',
-        role: 'system',
-        text: duplicateText,
-        intent: 'chat',
+        role: 'assistant',
+        parts: [{ type: 'text', text: duplicateText }],
       },
     ];
-    const out = collapseConsecutiveDuplicateSystemMessages(input);
+    const out = collapseConsecutiveDuplicateAssistantMessages(
+      input,
+      (message) => message.parts[0]?.text ?? ''
+    );
     assert.equal(out.length, 4);
     assert.deepEqual(
-      out.filter((m) => m.intent === 'chat').map((m) => m.id),
+      out
+        .filter((message) => message.parts[0]?.text === duplicateText)
+        .map((message) => message.id),
       ['w1', 'w2']
     );
   });

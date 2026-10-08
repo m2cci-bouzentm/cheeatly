@@ -79,6 +79,7 @@ const LauncherHeader: React.FC<LauncherHeaderProps> = ({
           variant="ghost"
           size="icon-sm"
           onClick={() => onOpenSettings()}
+          aria-label="Settings"
           className="h-7 w-7 text-white/60 hover:text-white hover:bg-white/10"
         >
           <Settings size={14} />

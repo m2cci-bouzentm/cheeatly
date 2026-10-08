@@ -17,7 +17,7 @@
 // Fix: keep expansion state out of the audio subscription effect deps.
 //
 // Strategy: source-level static check on useMeetingState.ts. Rendering
-// AssistantOverlay in RTL would require a massive IPC/electronAPI mock surface
+// AssistantOverlay in RTL would require a massive desktop API mock surface
 // and would not actually validate the dep array semantics.
 
 import { test } from 'node:test';

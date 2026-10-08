@@ -22,7 +22,7 @@ export default defineConfig({
         watch: {
             ignored: [
                 '**/.claude/worktrees/**',
-                '**/dist-main/**',
+                '**/src-tauri/target/**',
                 '**/release/**',
             ],
         },
