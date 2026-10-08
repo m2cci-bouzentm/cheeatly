@@ -15,6 +15,8 @@ pub struct AppSettings {
     pub question_analysis_interval: Option<u32>,
     pub question_analysis_model: Option<String>,
     pub question_analysis_window: Option<u32>,
+    pub mic_muted: Option<bool>,
+    pub system_muted: Option<bool>,
 }
 
 pub struct SettingsStore {
