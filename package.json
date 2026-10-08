@@ -23,7 +23,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "doctor": "npx react-doctor@latest",
-    "test:stt": "pkill -f speech-to-text 2>/dev/null || true; node --test --test-concurrency=1 tests/stt/parakeet.e2e.test.mjs"
+    "test:stt": "pkill -f speech-to-text 2>/dev/null || true; node --test --test-concurrency=1 tests/stt/parakeet.e2e.test.mjs",
+    "test:native:drag": "scripts/native-tests/window-drag.sh"
   },
   "keywords": [],
   "author": "",
