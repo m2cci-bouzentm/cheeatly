@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc as tokio_mpsc;
 
 use super::{
-    audio_capture::MicrophoneCapture,
+    audio_capture::{MicrophoneCapture, SystemAudioCapture},
     local_coreml::LocalCoreMlProvider,
     provider::{AudioChunk, TranscriptEvent, TranscriptionConfig, TranscriptionProvider},
 };
@@ -17,7 +17,8 @@ pub struct TranscriptionSession {
 enum SessionCommand {
     Start {
         app: Box<AppHandle>,
-        device_id: Option<String>,
+        input_device_id: Option<String>,
+        output_device_id: Option<String>,
         config: TranscriptionConfig,
         response: mpsc::Sender<anyhow::Result<()>>,
     },
@@ -30,9 +31,12 @@ enum SessionCommand {
 }
 
 struct RunningSession {
-    capture: MicrophoneCapture,
-    provider: LocalCoreMlProvider,
-    audio: mpsc::Receiver<AudioChunk>,
+    microphone: MicrophoneCapture,
+    system_audio: SystemAudioCapture,
+    microphone_provider: LocalCoreMlProvider,
+    system_provider: LocalCoreMlProvider,
+    microphone_audio: mpsc::Receiver<AudioChunk>,
+    system_audio_chunks: mpsc::Receiver<AudioChunk>,
 }
 
 impl TranscriptionSession {
@@ -45,13 +49,15 @@ impl TranscriptionSession {
     pub fn start_local(
         &self,
         app: &AppHandle,
-        device_id: Option<String>,
+        input_device_id: Option<String>,
+        output_device_id: Option<String>,
         config: TranscriptionConfig,
     ) -> anyhow::Result<()> {
         let (response_tx, response_rx) = mpsc::channel();
         self.commands.send(SessionCommand::Start {
             app: Box::new(app.clone()),
-            device_id,
+            input_device_id,
+            output_device_id,
             config,
             response: response_tx,
         })?;
@@ -87,8 +93,11 @@ fn run(receiver: mpsc::Receiver<SessionCommand>) {
     let mut running: Option<RunningSession> = None;
     loop {
         if let Some(session) = running.as_mut() {
-            while let Ok(chunk) = session.audio.try_recv() {
-                let _ = session.provider.send_audio(chunk);
+            while let Ok(chunk) = session.microphone_audio.try_recv() {
+                let _ = session.microphone_provider.send_audio(chunk);
+            }
+            while let Ok(chunk) = session.system_audio_chunks.try_recv() {
+                let _ = session.system_provider.send_audio(chunk);
             }
         }
         let Ok(command) = receiver.recv_timeout(std::time::Duration::from_millis(5)) else {
@@ -97,11 +106,18 @@ fn run(receiver: mpsc::Receiver<SessionCommand>) {
         match command {
             SessionCommand::Start {
                 app,
-                device_id,
+                input_device_id,
+                output_device_id,
                 config,
                 response,
             } => {
-                let result = start(&app, device_id, config, &mut running);
+                let result = start(
+                    &app,
+                    input_device_id,
+                    output_device_id,
+                    config,
+                    &mut running,
+                );
                 let _ = response.send(result);
             }
             SessionCommand::Stop { response } => {
@@ -116,36 +132,50 @@ fn run(receiver: mpsc::Receiver<SessionCommand>) {
 
 fn start(
     app: &AppHandle,
-    device_id: Option<String>,
+    input_device_id: Option<String>,
+    output_device_id: Option<String>,
     config: TranscriptionConfig,
     running: &mut Option<RunningSession>,
 ) -> anyhow::Result<()> {
     if running.is_some() {
         return Err(anyhow::anyhow!("transcription session already active"));
     }
-    let (audio_tx, audio_rx) = mpsc::channel::<AudioChunk>();
+    let (microphone_tx, microphone_rx) = mpsc::channel::<AudioChunk>();
+    let (system_tx, system_rx) = mpsc::channel::<AudioChunk>();
     let (event_tx, mut event_rx) = tokio_mpsc::unbounded_channel::<TranscriptEvent>();
-    let mut provider = LocalCoreMlProvider::bundled(app)?;
-    provider.start(config, event_tx)?;
+    let mut microphone_provider = LocalCoreMlProvider::bundled(app)?;
+    let mut microphone_config = config.clone();
+    microphone_config.source = super::provider::AudioSource::Microphone;
+    microphone_provider.start(microphone_config, event_tx.clone())?;
+    let mut system_provider = LocalCoreMlProvider::bundled(app)?;
+    let mut system_config = config;
+    system_config.source = super::provider::AudioSource::System;
+    system_provider.start(system_config, event_tx)?;
     let event_app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = event_rx.recv().await {
             let _ = event_app.emit("native-audio-transcript", event);
         }
     });
-    let capture = MicrophoneCapture::start(device_id, audio_tx)?;
+    let microphone = MicrophoneCapture::start(input_device_id, microphone_tx)?;
+    let system_audio = SystemAudioCapture::start(output_device_id, system_tx)?;
     *running = Some(RunningSession {
-        capture,
-        provider,
-        audio: audio_rx,
+        microphone,
+        system_audio,
+        microphone_provider,
+        system_provider,
+        microphone_audio: microphone_rx,
+        system_audio_chunks: system_rx,
     });
     Ok(())
 }
 
 fn stop(running: &mut Option<RunningSession>) -> anyhow::Result<()> {
     if let Some(mut session) = running.take() {
-        session.capture.stop()?;
-        session.provider.stop()?;
+        session.microphone.stop()?;
+        session.system_audio.stop();
+        session.microphone_provider.stop()?;
+        session.system_provider.stop()?;
     }
     Ok(())
 }

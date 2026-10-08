@@ -64,6 +64,11 @@ pub fn start_meeting(
         .and_then(|value| value.pointer("/audio/inputDeviceId"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
+    let output_device = metadata
+        .as_ref()
+        .and_then(|value| value.pointer("/audio/outputDeviceId"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
     let credentials = state.credentials.load().map_err(error)?;
     let settings = state.settings.lock().map_err(error)?;
     state
@@ -71,6 +76,7 @@ pub fn start_meeting(
         .start_local(
             &app,
             input_device,
+            output_device,
             crate::transcription::provider::TranscriptionConfig {
                 model: settings
                     .values()

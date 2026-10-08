@@ -89,21 +89,33 @@ pub struct SystemAudioCapture {
 }
 
 impl SystemAudioCapture {
-    pub fn start(device_id: Option<String>, output: mpsc::Sender<AudioChunk>) -> anyhow::Result<Self> {
+    pub fn start(
+        device_id: Option<String>,
+        output: mpsc::Sender<AudioChunk>,
+    ) -> anyhow::Result<Self> {
         let mut stream = SpeakerInput::new(device_id)?.stream()?;
         let sample_rate = stream.sample_rate();
-        let mut consumer = stream.take_consumer().ok_or_else(|| anyhow::anyhow!("system audio consumer unavailable"))?;
+        let mut consumer = stream
+            .take_consumer()
+            .ok_or_else(|| anyhow::anyhow!("system audio consumer unavailable"))?;
         let running = Arc::new(AtomicBool::new(true));
         let worker_running = running.clone();
         let worker = thread::spawn(move || {
-            let mut resampler = match Resampler::new(sample_rate as f64) { Ok(value) => value, Err(_) => return };
+            let mut resampler = match Resampler::new(sample_rate as f64) {
+                Ok(value) => value,
+                Err(_) => return,
+            };
             let mut input = Vec::with_capacity((sample_rate / 20) as usize);
             while worker_running.load(Ordering::Acquire) {
                 while let Some(sample) = consumer.try_pop() {
                     input.push(sample);
                     if input.len() >= (sample_rate / 20) as usize {
                         if let Ok(pcm16) = resampler.resample_to_i16(&input) {
-                            let _ = output.send(AudioChunk { source: AudioSource::System, pcm16, sample_rate: cheatly_audio::TRANSCRIPTION_SAMPLE_RATE });
+                            let _ = output.send(AudioChunk {
+                                source: AudioSource::System,
+                                pcm16,
+                                sample_rate: cheatly_audio::TRANSCRIPTION_SAMPLE_RATE,
+                            });
                         }
                         input.clear();
                     }
@@ -111,16 +123,24 @@ impl SystemAudioCapture {
                 thread::sleep(Duration::from_millis(5));
             }
         });
-        Ok(Self { stream, running, worker: Some(worker) })
+        Ok(Self {
+            stream,
+            running,
+            worker: Some(worker),
+        })
     }
 
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::Release);
         self.stream.pause();
-        if let Some(worker) = self.worker.take() { let _ = worker.join(); }
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
 impl Drop for SystemAudioCapture {
-    fn drop(&mut self) { self.stop(); }
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
