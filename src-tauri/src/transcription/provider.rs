@@ -18,8 +18,9 @@ pub struct AudioChunk {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptEvent {
-    pub source: AudioSource,
+    pub speaker: &'static str,
     pub text: String,
+    #[serde(rename = "final")]
     pub final_result: bool,
 }
 

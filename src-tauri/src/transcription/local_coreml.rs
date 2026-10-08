@@ -92,7 +92,11 @@ impl TranscriptionProvider for LocalCoreMlProvider {
                     continue;
                 }
                 let _ = events.send(TranscriptEvent {
-                    source,
+                    speaker: if source == AudioSource::System {
+                        "interviewer"
+                    } else {
+                        "user"
+                    },
                     text,
                     final_result: kind == "final",
                 });
