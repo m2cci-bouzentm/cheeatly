@@ -2,50 +2,54 @@
 
 AI meeting assistant. Live transcription, real-time suggestions, and auto-generated meeting notes.
 
-> **macOS only.** The local speech-to-text engine (Parakeet) is built with Swift and uses macOS-native audio APIs. No Windows/Linux support.
+> **Validated on macOS Apple Silicon.** Rust captures microphone and system audio; the Swift/Core ML sidecar transcribes it locally with Parakeet. Windows/Linux acceptance is not complete.
 
 ## Prerequisites
 
-- **macOS** (Apple Silicon or Intel)
+- **macOS 14+** (validated on Apple Silicon)
 - **Node.js** 18+
-- **Rust** (for the native platform bridge) — install via [rustup](https://rustup.rs)
+- **Rust** (for Tauri and native audio) — install via [rustup](https://rustup.rs)
 - **Swift 6.0+** (ships with Xcode 16+)
 
 ## Dev Setup
 
 ```bash
-# install dependencies + build native modules
+# install frontend dependencies
 npm install
 
 # copy env file
 cp .env.example .env
 
-# start dev (Vite + Electron)
+# build the Swift sidecar and start Tauri + Vite
 npm start
 ```
 
-This launches Vite on port 5180 and opens the Electron app pointing at it.
+This launches Vite on port 5180 and opens the Tauri app. Configure your provider key in Settings and grant microphone and Screen Recording access when requested.
 
 ## Build (macOS .dmg)
 
 ```bash
-npm run app:build
+npm run tauri:build
 ```
 
-Output lands in `release/`. Builds native modules for both x64 and arm64.
+Output lands in `target/release/bundle/`. Builds for the current Mac architecture; the default signature is ad hoc.
 
 For a signed build:
 
 ```bash
-npm run app:build:signed
+APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" npm run tauri:build
 ```
 
 ## Tests
 
 ```bash
-npm test           # unit tests
-npm run test:e2e   # playwright e2e
+npm run test:unit  # frontend checks
+npm run test:rust  # Rust workspace tests
+npm run test:e2e   # Playwright checks
+npm run test:stt   # real Swift/Core ML transcription tests
 ```
+
+See [native acceptance results](tests/native/README.md) for real macOS checks and remaining limits.
 
 ## License
 
