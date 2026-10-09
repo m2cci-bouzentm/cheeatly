@@ -79,14 +79,22 @@ impl ShortcutStore {
             .filter(|keybind| keybind.is_global && !keybind.accelerator.is_empty())
         {
             let action = keybind.id.clone();
-            app.global_shortcut()
-                .on_shortcut(keybind.accelerator.as_str(), move |app, _, event| {
+            if let Err(error) = app.global_shortcut().on_shortcut(
+                keybind.accelerator.as_str(),
+                move |app, _, event| {
                     if event.state == ShortcutState::Pressed {
                         let _ =
                             app.emit("global-shortcut", serde_json::json!({ "action": action }));
                     }
-                })
-                .map_err(|error| error.to_string())?;
+                },
+            ) {
+                log::warn!(
+                    "Failed to register shortcut {} ({}): {}",
+                    keybind.id,
+                    keybind.accelerator,
+                    error
+                );
+            }
         }
         Ok(())
     }
