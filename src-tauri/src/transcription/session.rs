@@ -151,10 +151,12 @@ fn start(
     let (microphone_tx, microphone_rx) = mpsc::channel::<AudioChunk>();
     let (system_tx, system_rx) = mpsc::channel::<AudioChunk>();
     let (event_tx, mut event_rx) = tokio_mpsc::unbounded_channel::<TranscriptEvent>();
+    log::info!("Starting microphone Core ML provider");
     let mut microphone_provider = LocalCoreMlProvider::bundled(app)?;
     let mut microphone_config = config.clone();
     microphone_config.source = super::provider::AudioSource::Microphone;
     microphone_provider.start(microphone_config, event_tx.clone())?;
+    log::info!("Starting system Core ML provider");
     let mut system_provider = LocalCoreMlProvider::bundled(app)?;
     let mut system_config = config;
     system_config.source = super::provider::AudioSource::System;
@@ -177,7 +179,9 @@ fn start(
             let _ = event_app.emit("native-audio-transcript", event);
         }
     });
+    log::info!("Starting Rust microphone capture");
     let microphone = MicrophoneCapture::start(input_device_id, microphone_tx)?;
+    log::info!("Starting Rust system audio capture");
     let system_audio = SystemAudioCapture::start(output_device_id, system_tx)?;
     *running = Some(RunningSession {
         microphone,

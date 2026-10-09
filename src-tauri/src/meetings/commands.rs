@@ -86,6 +86,7 @@ pub async fn start_meeting(
     let transcription = state.transcription.clone();
     let meeting_state = state.meeting.clone();
     let transcription_app = app.clone();
+    log::info!("Starting native transcription session");
     tauri::async_runtime::spawn_blocking(move || {
         transcription.start_local(
             &transcription_app,
@@ -102,6 +103,7 @@ pub async fn start_meeting(
     .await
     .map_err(error)?
     .map_err(error)?;
+    log::info!("Native transcription session started");
     {
         let mut meeting = state.meeting.lock().map_err(error)?;
         meeting.active = true;
