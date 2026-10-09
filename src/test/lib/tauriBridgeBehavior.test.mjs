@@ -48,6 +48,11 @@ test('desktop API preserves command names, argument shapes, and response payload
       'set_channel_muted',
       { channel: 'system', muted: true },
     ],
+    ['getQuestionState', [], 'get_question_state', {}],
+    ['scanQuestions', [], 'scan_questions', {}],
+    ['setQuestionsPaused', [true], 'set_questions_paused', { paused: true }],
+    ['dismissQuestion', ['q1'], 'dismiss_question', { id: 'q1' }],
+    ['resetQuestions', [], 'reset_questions', {}],
     ['setModel', ['model'], 'set_model', { modelId: 'model' }],
     ['setUndetectable', [true], 'set_undetectable', { value: true }],
     [

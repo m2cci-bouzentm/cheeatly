@@ -4,6 +4,12 @@ AI meeting assistant. Live transcription, real-time suggestions, and auto-genera
 
 > **Validated on macOS Apple Silicon.** Rust captures microphone and system audio; the Swift/Core ML sidecar transcribes it locally with Parakeet. Windows/Linux acceptance is not complete.
 
+## Architecture
+
+Feature modules with thin Tauri adapters and Rust-owned workflows. Recording,
+transcript state, and question scanning survive overlay remounts.
+See [architecture and regression boundaries](docs/architecture-options.md).
+
 ## Prerequisites
 
 - **macOS 14+** (validated on Apple Silicon)

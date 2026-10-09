@@ -1,4 +1,31 @@
+export interface DetectedQuestion {
+  id: string;
+  speaker: 'Me' | 'Them';
+  text: string;
+  timestamp: number;
+  type: string;
+  intent?: string;
+  prompt?: string;
+  priority?: string;
+}
+export interface QuestionSnapshot {
+  questions: DetectedQuestion[];
+  isScanning: boolean;
+  scanError: string;
+  scanNotice: string;
+  settingsEnabled: boolean;
+  isPaused: boolean;
+  revision: number;
+}
 export interface DesktopAPI {
+  getQuestionState: () => Promise<QuestionSnapshot>;
+  scanQuestions: () => Promise<QuestionSnapshot>;
+  setQuestionsPaused: (paused: boolean) => Promise<QuestionSnapshot>;
+  dismissQuestion: (id: string) => Promise<QuestionSnapshot>;
+  resetQuestions: () => Promise<QuestionSnapshot>;
+  onQuestionStateChanged: (
+    callback: (snapshot: QuestionSnapshot) => void
+  ) => () => void;
   updateContentDimensions: (dimensions: {
     width: number;
     height: number;
@@ -204,7 +231,12 @@ export interface DesktopAPI {
     }) => void
   ) => () => void;
 
-  getNativeAudioStatus: () => Promise<{ connected: boolean; transcript?: Array<{ speaker: "Me" | "Them"; text: string }>; micMuted?: boolean; systemMuted?: boolean }>;
+  getNativeAudioStatus: () => Promise<{
+    connected: boolean;
+    transcript?: Array<{ speaker: 'Me' | 'Them'; text: string }>;
+    micMuted?: boolean;
+    systemMuted?: boolean;
+  }>;
 
   // Intelligence Mode IPC
   getIntelligenceContext: () => Promise<{
@@ -428,7 +460,11 @@ export interface DesktopAPI {
     window?: number;
   }) => Promise<{ success: boolean }>;
   onQuestionAnalysisConfigChanged: (
-    callback: (config: { enabled: boolean; interval: number; window: number }) => void
+    callback: (config: {
+      enabled: boolean;
+      interval: number;
+      window: number;
+    }) => void
   ) => () => void;
   getLogFilePath: () => Promise<string | null>;
   openLogFile: () => Promise<{ success: boolean; error?: string }>;

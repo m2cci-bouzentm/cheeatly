@@ -176,6 +176,7 @@ pub async fn set_question_analysis_config(
             }
         })
         .map_err(error)?;
+    let _ = state.questions.snapshot();
     let current = get_question_analysis_config(state).await?;
     app.emit(
         "question-analysis-config-changed",

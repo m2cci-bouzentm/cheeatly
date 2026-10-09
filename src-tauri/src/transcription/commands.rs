@@ -80,9 +80,9 @@ pub async fn get_native_audio_status(state: State<'_, AppState>) -> Result<Value
         .await
         .map_err(error)?;
     let transcript = state
-        .meeting
-        .lock()
-        .map(|m| m.transcript.clone())
+        .meetings
+        .snapshot()
+        .map(|m| m.transcript)
         .unwrap_or_default();
     let settings = state.settings.lock().ok();
     Ok(
@@ -120,7 +120,7 @@ pub async fn local_parakeet_get_config(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     let settings = state.settings.lock().map_err(error)?.values().clone();
-    let binary = super::local_coreml::sidecar_path(&app).map_err(error)?;
+    let binary = super::paths::sidecar_path(&app).map_err(error)?;
     let output = tauri::async_runtime::spawn_blocking(move || {
         std::process::Command::new(binary)
             .arg("list-models")
@@ -177,7 +177,7 @@ pub async fn local_parakeet_download_model(
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         use std::io::{BufRead, BufReader};
         use std::process::{Command, Stdio};
-        let binary = super::local_coreml::sidecar_path(&app).map_err(error)?;
+        let binary = super::paths::sidecar_path(&app).map_err(error)?;
         let mut child = Command::new(binary)
             .args(["download-model", "--model", &model_id])
             .stdout(Stdio::piped())

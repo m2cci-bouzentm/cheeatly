@@ -4,9 +4,9 @@ use std::{
     thread,
 };
 
+use crate::events::{Event, EventSink};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::json;
-use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 
 use super::provider::{
@@ -15,22 +15,21 @@ use super::provider::{
 
 pub struct LocalCoreMlProvider {
     binary: std::path::PathBuf,
-    app: AppHandle,
+    events: EventSink,
     child: Option<Child>,
     stdin: Option<ChildStdin>,
     reader: Option<thread::JoinHandle<()>>,
 }
 
 impl LocalCoreMlProvider {
-    pub fn bundled(app: &AppHandle) -> anyhow::Result<Self> {
-        let binary = sidecar_path(app)?;
-        Ok(Self {
+    pub fn new(binary: std::path::PathBuf, events: EventSink) -> Self {
+        Self {
             binary,
-            app: app.clone(),
+            events,
             child: None,
             stdin: None,
             reader: None,
-        })
+        }
     }
 
     fn write(&mut self, value: serde_json::Value) -> anyhow::Result<()> {
@@ -43,29 +42,6 @@ impl LocalCoreMlProvider {
         stdin.flush()?;
         Ok(())
     }
-}
-
-pub fn sidecar_path(app: &AppHandle) -> anyhow::Result<std::path::PathBuf> {
-    let resource = app
-        .path()
-        .resolve("speech-to-text", tauri::path::BaseDirectory::Resource)?;
-    let executable = std::env::current_exe()?.with_file_name(if cfg!(target_os = "windows") {
-        "speech-to-text.exe"
-    } else {
-        "speech-to-text"
-    });
-    let binary = if resource.is_file() {
-        resource
-    } else if executable.is_file() {
-        executable
-    } else {
-        return Err(anyhow::anyhow!(
-            "speech-to-text sidecar not found at {} or {}",
-            resource.display(),
-            executable.display()
-        ));
-    };
-    Ok(binary)
 }
 
 impl TranscriptionProvider for LocalCoreMlProvider {
@@ -89,16 +65,17 @@ impl TranscriptionProvider for LocalCoreMlProvider {
             .take()
             .ok_or_else(|| anyhow::anyhow!("STT stdout unavailable"))?;
         let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
-        let event_app = self.app.clone();
+        let notifications = self.events.clone();
         let channel = if config.source == AudioSource::System {
             "interviewer"
         } else {
             "user"
         };
-        let _ = self.app.emit(
-            "stt-status",
-            json!({"channel":channel,"status":"awaiting-audio"}),
-        );
+        self.events.send(Event::SpeechStatus {
+            channel,
+            status: "awaiting-audio",
+            error: None,
+        });
         self.reader = Some(thread::spawn(move || {
             let mut ready_tx = Some(ready_tx);
             let mut reconciler = super::provider::TranscriptReconciler::default();
@@ -110,10 +87,11 @@ impl TranscriptionProvider for LocalCoreMlProvider {
                     continue;
                 };
                 if kind == "session_started" {
-                    let _ = event_app.emit(
-                        "stt-status",
-                        json!({"channel":channel,"status":"connected"}),
-                    );
+                    notifications.send(Event::SpeechStatus {
+                        channel,
+                        status: "connected",
+                        error: None,
+                    });
                     if let Some(tx) = ready_tx.take() {
                         let _ = tx.send(Ok(()));
                     }
@@ -124,10 +102,11 @@ impl TranscriptionProvider for LocalCoreMlProvider {
                         .and_then(|v| v.as_str())
                         .unwrap_or("Local STT failed")
                         .to_owned();
-                    let _ = event_app.emit(
-                        "stt-status",
-                        json!({"channel":channel,"status":"failed","error":message}),
-                    );
+                    notifications.send(Event::SpeechStatus {
+                        channel,
+                        status: "failed",
+                        error: Some(message.clone()),
+                    });
                     if let Some(tx) = ready_tx.take() {
                         let _ = tx.send(Err(message));
                     }

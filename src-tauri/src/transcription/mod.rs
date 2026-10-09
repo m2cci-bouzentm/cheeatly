@@ -6,4 +6,6 @@ pub mod provider;
 mod session;
 
 pub use audio_test::AudioTestSession;
-pub use session::TranscriptionSession;
+pub use session::{TranscriptHandler, TranscriptionSession};
+pub mod paths;
+pub mod service;

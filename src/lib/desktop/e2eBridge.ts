@@ -15,6 +15,15 @@ const nothing = async () => undefined;
 export const e2eDesktopAPI = new Proxy(
   {
     platform: 'darwin',
+    getQuestionState: async () => ({
+      questions: [],
+      isScanning: false,
+      scanError: '',
+      scanNotice: '',
+      settingsEnabled: true,
+      isPaused: false,
+      revision: 0,
+    }),
     getRecentMeetings: async () => [],
     getMeetingActive: async () => false,
     getStoredCredentials: async () => ({
@@ -45,6 +54,15 @@ export const e2eDesktopAPI = new Proxy(
       microphone: 'granted',
       screen: 'granted',
       platform: 'darwin',
+      getQuestionState: async () => ({
+        questions: [],
+        isScanning: false,
+        scanError: '',
+        scanNotice: '',
+        settingsEnabled: true,
+        isPaused: false,
+        revision: 0,
+      }),
     }),
     skillsList: async () => [],
     contextGetDescription: async () => ({ success: true, content: '' }),

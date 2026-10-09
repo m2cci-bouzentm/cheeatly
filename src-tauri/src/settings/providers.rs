@@ -114,7 +114,7 @@ pub async fn set_stt_provider(
     if !matches!(provider.as_str(), "none" | "local-parakeet") {
         return Err("Unsupported STT provider".into());
     }
-    if state.meeting.lock().map_err(error)?.active {
+    if state.meetings.snapshot().map_err(error)?.active {
         return Err("Stop the meeting before changing the STT provider".into());
     }
     let mut values = credentials(&state).await?;

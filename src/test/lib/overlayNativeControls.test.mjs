@@ -8,7 +8,7 @@ test('stop and discard await completion before returning to the launcher', () =>
   const overlay = source('../../pages/AssistantOverlay/index.tsx');
   const handler = overlay.slice(
     overlay.indexOf('const finishMeeting'),
-    overlay.indexOf('const scanTurns')
+    overlay.indexOf('const questionDetectionPaused')
   );
   assert.match(handler, /await window\.desktopAPI\.endMeeting\(\)/);
   assert.match(handler, /await window\.desktopAPI\.abortMeeting\(\)/);
@@ -28,16 +28,12 @@ test('overlay uses built-in Tauri drag regions', () => {
   assert.doesNotMatch(bridge, /addEventListener\('mousedown'/);
 });
 
-test('question scans only mark a transcript processed after a successful response', () => {
+test('question hook subscribes to backend state without owning scheduling', () => {
   const hook = source('../../hooks/meeting/useDetectedQuestions.ts');
-  const request = hook.indexOf(
-    'await window.desktopAPI.analyzeTranscript(transcript)'
-  );
-  const markProcessed = hook.indexOf('lastHashRef.current = hash');
-  assert.ok(request >= 0 && markProcessed > request);
-  assert.match(hook, /setScanError\(/);
-  assert.match(hook, /await analyze\(true\)/);
-  assert.match(hook, /generation !== generationRef.current/);
+  assert.match(hook, /onQuestionStateChanged/);
+  assert.match(hook, /getQuestionState/);
+  assert.match(hook, /scanQuestions/);
+  assert.doesNotMatch(hook, /setInterval|analyzeTranscript/);
 });
 
 test('overlay dropdowns render in the main window without creating native windows', () => {

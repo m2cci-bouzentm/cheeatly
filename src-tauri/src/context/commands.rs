@@ -1,5 +1,3 @@
-use std::fs;
-
 use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -26,13 +24,7 @@ pub fn context_save_description(
     content: String,
     state: State<AppState>,
 ) -> Result<Success, String> {
-    let content: String = content.chars().take(4000).collect();
-    state
-        .database
-        .lock()
-        .map_err(error)?
-        .save_context_description(&content)
-        .map_err(error)?;
+    super::service::save_description(&state.database, &content).map_err(error)?;
     Ok(Success::new())
 }
 
@@ -49,15 +41,7 @@ pub fn context_get_files(state: State<AppState>) -> serde_json::Value {
 
 #[tauri::command]
 pub fn context_delete_file(id: String, state: State<AppState>) -> Result<Success, String> {
-    if let Some(path) = state
-        .database
-        .lock()
-        .map_err(error)?
-        .delete_context_file(&id)
-        .map_err(error)?
-    {
-        let _ = fs::remove_file(path);
-    }
+    super::service::delete_file(&state.database, &id).map_err(error)?;
     Ok(Success::new())
 }
 
@@ -78,20 +62,13 @@ pub async fn context_upload_file(
         return Ok(json!({ "success": false, "cancelled": true }));
     };
     let source = file.into_path().map_err(error)?;
-    let filename = source
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "Invalid filename".to_string())?;
-    let content = super::documents::read(&source).map_err(error)?;
     let storage = app.path().app_data_dir().map_err(error)?.join("context");
-    fs::create_dir_all(&storage).map_err(error)?;
-    let destination = storage.join(format!("{}-{}", uuid::Uuid::new_v4(), filename));
-    fs::write(&destination, content).map_err(error)?;
-    let file = state
-        .database
-        .lock()
-        .map_err(error)?
-        .create_context_file(filename, destination.to_string_lossy().as_ref())
-        .map_err(error)?;
+    let database = state.database.clone();
+    let file = tokio::task::spawn_blocking(move || {
+        super::service::import_file(&database, &storage, &source)
+    })
+    .await
+    .map_err(error)?
+    .map_err(error)?;
     Ok(json!({ "success": true, "file": file }))
 }

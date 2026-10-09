@@ -12,20 +12,23 @@ function on<T>(eventName: string, callback: EventCallback<T>): () => void {
   let disposed = false;
   let unlisten: (() => void) | undefined;
 
-  const registration = listen<T>(eventName, (event: Event<T>) => { if (!disposed) callback(event.payload); }).then(
-    (stop) => {
-      if (disposed) {
-        stop();
-        return;
-      }
-      unlisten = stop;
+  const registration = listen<T>(eventName, (event: Event<T>) => {
+    if (!disposed) callback(event.payload);
+  }).then((stop) => {
+    if (disposed) {
+      stop();
+      return;
     }
-  );
+    unlisten = stop;
+  });
 
   pendingListeners.add(registration);
   void registration.then(
     () => pendingListeners.delete(registration),
-    (error) => { pendingListeners.delete(registration); console.error(`Unable to listen for ${eventName}`, error); },
+    (error) => {
+      pendingListeners.delete(registration);
+      console.error(`Unable to listen for ${eventName}`, error);
+    }
   );
 
   return () => {
@@ -38,7 +41,11 @@ const call = <T>(command: string, args?: Record<string, unknown>): Promise<T> =>
   invoke<T>(command, args);
 
 export const desktopAPI: DesktopAPI = {
-  platform: (platform() === 'macos' ? 'darwin' : platform() === 'windows' ? 'win32' : platform()) as NodeJS.Platform,
+  platform: (platform() === 'macos'
+    ? 'darwin'
+    : platform() === 'windows'
+      ? 'win32'
+      : platform()) as NodeJS.Platform,
   updateContentDimensions: (dimensions) =>
     call('update_content_dimensions', { dimensions }),
   takeScreenshot: () => call('take_screenshot'),
@@ -89,6 +96,15 @@ export const desktopAPI: DesktopAPI = {
   onCredentialsChanged: (callback) => on('credentials-changed', callback),
   onNativeAudioTranscript: (callback) =>
     on('native-audio-transcript', callback),
+  getQuestionState: async () => {
+    await Promise.all([...pendingListeners]);
+    return call('get_question_state');
+  },
+  scanQuestions: () => call('scan_questions'),
+  setQuestionsPaused: (paused) => call('set_questions_paused', { paused }),
+  dismissQuestion: (id) => call('dismiss_question', { id }),
+  resetQuestions: () => call('reset_questions'),
+  onQuestionStateChanged: (callback) => on('questions-changed', callback),
   analyzeTranscript: (transcript) => call('analyze_transcript', { transcript }),
   onAudioCaptureActive: (callback) => on('audio-capture-active', callback),
   setChannelMuted: (channel, muted) =>
@@ -145,12 +161,18 @@ export const desktopAPI: DesktopAPI = {
     queuedChatStarts.set(streamId, true);
     try {
       await Promise.all([...pendingListeners]);
-      if (!queuedChatStarts.get(streamId)) throw new DOMException('Aborted', 'AbortError');
-    } finally { queuedChatStarts.delete(streamId); }
+      if (!queuedChatStarts.get(streamId))
+        throw new DOMException('Aborted', 'AbortError');
+    } finally {
+      queuedChatStarts.delete(streamId);
+    }
     return call('chat_stream_start', { streamId, messages, options });
   },
   chatStreamAbort: (streamId) => {
-    if (queuedChatStarts.has(streamId)) { queuedChatStarts.set(streamId, false); return; }
+    if (queuedChatStarts.has(streamId)) {
+      queuedChatStarts.set(streamId, false);
+      return;
+    }
     void call('chat_stream_abort', { streamId }).catch(console.error);
   },
   onChatStreamEvent: (callback) => on('chat-stream-event', callback),
@@ -206,5 +228,4 @@ export const desktopAPI: DesktopAPI = {
 
 export function installDesktopBridge(): void {
   window.desktopAPI = desktopAPI;
-
 }

@@ -1,3 +1,57 @@
+# Architecture refactor acceptance — macOS, 2026-10-09
+
+Installed `/Applications/Cheatly.app`, release executable SHA256:
+`d56a44b92188161f814ac14078e9b98db4cecac426294f089b48570b6513b3e0`.
+Installed executable matches the generated bundle; strict/deep code-signature
+verification passed. All Cheatly windows stayed on AeroSpace workspace **10**.
+
+## This pass
+
+- Real `cua_repl` accessibility clicks started microphone/system capture using
+  both installed Swift speech processes. The changed ad hoc executable first hit
+  macOS error `-3801` despite its old enabled grant. Removed that obsolete entry,
+  re-added `/Applications/Cheatly.app` through System Settings, and reopened it.
+  Capture then worked. No protected database edits or authentication bypasses.
+- Played the synthetic database/payment question fixture through system audio.
+  Automatic detection produced suggestions through real OpenRouter calls.
+- Returned to the launcher while recording. Backend scans continued: reopening
+  the overlay hydrated 13 suggestions, up from 5 before leaving, including the
+  synthetic PostgreSQL/MongoDB and idempotent-payment questions.
+- Pause/resume reset suggestions correctly. Manual Scan now completed with
+  “5 new suggestions.” Selecting the synthetic payment suggestion consumed it
+  and streamed a complete assistant response.
+- Model selector and quick settings opened inside the one existing Cheatly
+  window. Actual screenshots showed the overlay when Detectable, and blank
+  capture when Undetectable. Restored GPT-OSS 120B and Undetectable.
+- Stop & Save showed its busy state, returned to the launcher, and added exactly
+  one meeting (3 → 4). Title and summary completed. Reopened Transcript through
+  the UI and verified the synthetic database question persisted.
+- Started a fresh meeting: prior suggestions/chat were cleared and both audio
+  mute states reset. Muted both channels and clicked Discard. Returned to the
+  launcher with 4 saved meetings and no remaining speech processes.
+- Finished with recording stopped and the launcher open on workspace 10.
+  Temporary AeroSpace routing was removed after testing.
+
+## Repeatable checks
+
+- `npm test`: **40 Node + 61 Rust + 12 browser tests passed**.
+- Strict workspace Clippy and release/frontend builds passed.
+- Real installed Swift/Core ML suite: **10 passed, 1 existing skip**. The sidecar
+  is byte-for-byte identical in the tested prior install and the new bundle.
+- Logs: `tmp/refactor-acceptance-suite.log`, `tmp/refactor-clippy-final.log`,
+  `tmp/refactor-release-final.log`, `tmp/refactor-stt.log`.
+- UI snapshots/screenshots are in this task's computer-use transcript. Application
+  logs show question completion through `assistant::service`, including scans
+  while the overlay was unmounted.
+
+Other system audio was playing, so the saved test meeting includes ambient audio.
+The new test meeting remains alongside the three existing meetings. This pass
+checks workflow behavior, not isolated transcription or generated-summary accuracy.
+Dragging remains the previously user-confirmed implementation; it was not re-tested
+in this pass. Cross-platform, hotkey, and notarization limitations below still apply.
+
+---
+
 # Native acceptance — macOS, 2026-10-09
 
 App: `/Applications/Cheatly.app`, Apple Silicon release at `491947c`.

@@ -131,9 +131,15 @@ mod tests {
 
     #[test]
     fn recognizes_screen_consent_denial_without_mislabeling_device_errors() {
-        assert!(is_screen_consent_error("Error Domain=com.apple.ScreenCaptureKit.SCStreamErrorDomain Code=-3801"));
-        assert!(is_screen_consent_error("ScreenCaptureKit content callback never fired (10s)"));
-        assert!(!is_screen_consent_error("ScreenCaptureKit access denied: no display available"));
+        assert!(is_screen_consent_error(
+            "Error Domain=com.apple.ScreenCaptureKit.SCStreamErrorDomain Code=-3801"
+        ));
+        assert!(is_screen_consent_error(
+            "ScreenCaptureKit content callback never fired (10s)"
+        ));
+        assert!(!is_screen_consent_error(
+            "ScreenCaptureKit access denied: no display available"
+        ));
         assert!(!is_screen_consent_error("Microphone device disconnected"));
     }
 }

@@ -87,8 +87,7 @@ impl SummaryJob {
         credentials: CredentialService,
         database: Arc<Mutex<Database>>,
     ) -> Result<()> {
-        let credentials =
-            tauri::async_runtime::spawn_blocking(move || credentials.load()).await??;
+        let credentials = tokio::task::spawn_blocking(move || credentials.load()).await??;
         let title_prompt = include_str!("../../resources/prompts/title.md").replace(
             "{{transcript}}",
             &self.transcript.chars().take(2000).collect::<String>(),

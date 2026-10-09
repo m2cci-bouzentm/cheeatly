@@ -7,10 +7,11 @@ use std::{
     thread,
 };
 
-use tauri::{AppHandle, Emitter};
+use crate::events::{Event, EventSink};
+use std::path::PathBuf;
 use tokio::sync::mpsc as tokio_mpsc;
 
-use crate::state::MeetingState;
+pub type TranscriptHandler = Arc<dyn Fn(TranscriptEvent) + Send + Sync>;
 
 use super::{
     audio_capture::{MicrophoneCapture, SystemAudioCapture},
@@ -26,11 +27,12 @@ pub struct TranscriptionSession {
 
 enum SessionCommand {
     Start {
-        app: Box<AppHandle>,
+        binary: PathBuf,
+        notifications: EventSink,
         input_device_id: Option<String>,
         output_device_id: Option<String>,
         config: TranscriptionConfig,
-        meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
+        transcript: TranscriptHandler,
         response: mpsc::Sender<anyhow::Result<()>>,
     },
     Stop {
@@ -43,7 +45,7 @@ enum SessionCommand {
 
 struct RunningSession {
     events: Option<thread::JoinHandle<()>>,
-    app: AppHandle,
+    notifications: EventSink,
     microphone: MicrophoneCapture,
     system_audio: SystemAudioCapture,
     microphone_provider: LocalCoreMlProvider,
@@ -63,19 +65,21 @@ impl TranscriptionSession {
 
     pub fn start_local(
         &self,
-        app: &AppHandle,
+        binary: PathBuf,
+        notifications: EventSink,
         input_device_id: Option<String>,
         output_device_id: Option<String>,
         config: TranscriptionConfig,
-        meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
+        transcript: TranscriptHandler,
     ) -> anyhow::Result<()> {
         let (response_tx, response_rx) = mpsc::channel();
         self.commands.send(SessionCommand::Start {
-            app: Box::new(app.clone()),
+            binary,
+            notifications,
             input_device_id,
             output_device_id,
             config,
-            meeting,
+            transcript,
             response: response_tx,
         })?;
         response_rx.recv()?
@@ -143,19 +147,20 @@ fn run(receiver: mpsc::Receiver<SessionCommand>, muted: Arc<[AtomicBool; 2]>) {
         };
         match command {
             SessionCommand::Start {
-                app,
+                binary,
+                notifications,
                 input_device_id,
                 output_device_id,
                 config,
-                meeting,
+                transcript,
                 response,
             } => {
                 let result = start(
-                    &app,
-                    input_device_id,
-                    output_device_id,
+                    binary,
+                    notifications,
+                    (input_device_id, output_device_id),
                     config,
-                    meeting,
+                    transcript,
                     &mut running,
                     &muted,
                 );
@@ -172,11 +177,11 @@ fn run(receiver: mpsc::Receiver<SessionCommand>, muted: Arc<[AtomicBool; 2]>) {
 }
 
 fn start(
-    app: &AppHandle,
-    input_device_id: Option<String>,
-    output_device_id: Option<String>,
+    binary: PathBuf,
+    notifications: EventSink,
+    (input_device_id, output_device_id): (Option<String>, Option<String>),
     config: TranscriptionConfig,
-    meeting: std::sync::Arc<std::sync::Mutex<MeetingState>>,
+    transcript: TranscriptHandler,
     running: &mut Option<RunningSession>,
     muted: &Arc<[AtomicBool; 2]>,
 ) -> anyhow::Result<()> {
@@ -187,43 +192,18 @@ fn start(
     let (system_tx, system_rx) = mpsc::sync_channel::<AudioChunk>(20);
     let (event_tx, mut event_rx) = tokio_mpsc::unbounded_channel::<TranscriptEvent>();
     log::info!("Starting microphone Core ML provider");
-    let mut microphone_provider = LocalCoreMlProvider::bundled(app)?;
+    let mut microphone_provider = LocalCoreMlProvider::new(binary.clone(), notifications.clone());
     let mut microphone_config = config.clone();
     microphone_config.source = super::provider::AudioSource::Microphone;
     microphone_provider.start(microphone_config, event_tx.clone())?;
     log::info!("Starting system Core ML provider");
-    let mut system_provider = LocalCoreMlProvider::bundled(app)?;
+    let mut system_provider = LocalCoreMlProvider::new(binary.clone(), notifications.clone());
     let mut system_config = config;
     system_config.source = super::provider::AudioSource::System;
     system_provider.start(system_config, event_tx)?;
-    let event_app = app.clone();
     let events = thread::spawn(move || {
         while let Some(event) = event_rx.blocking_recv() {
-            if event.final_result
-                && let Ok(mut meeting) = meeting.lock()
-            {
-                let speaker = if event.speaker == "user" {
-                    "Me"
-                } else {
-                    "Them"
-                };
-                if let Some(last) = meeting
-                    .transcript
-                    .last_mut()
-                    .filter(|last| last.speaker == speaker)
-                {
-                    if last.text != event.text {
-                        last.text.push(' ');
-                        last.text.push_str(&event.text);
-                    }
-                } else {
-                    meeting.transcript.push(crate::state::TranscriptTurn {
-                        speaker: speaker.into(),
-                        text: event.text.clone(),
-                    });
-                }
-            }
-            let _ = event_app.emit("native-audio-transcript", event);
+            transcript(event);
         }
     });
     log::info!("Starting Rust microphone capture");
@@ -232,7 +212,7 @@ fn start(
     let system_audio = SystemAudioCapture::start(output_device_id, system_tx, muted.clone())?;
     *running = Some(RunningSession {
         events: Some(events),
-        app: app.clone(),
+        notifications: notifications.clone(),
         microphone,
         system_audio,
         microphone_provider,
@@ -241,10 +221,10 @@ fn start(
         system_audio_chunks: system_rx,
     });
     for channel in ["mic", "system"] {
-        let _ = app.emit(
-            "audio-capture-active",
-            serde_json::json!({"channel":channel,"active":true}),
-        );
+        notifications.send(Event::CaptureActive {
+            channel,
+            active: true,
+        });
     }
     Ok(())
 }
@@ -278,10 +258,10 @@ fn stop(running: &mut Option<RunningSession>, muted: &[AtomicBool; 2]) -> anyhow
             let _ = events.join();
         }
         for channel in ["mic", "system"] {
-            let _ = session.app.emit(
-                "audio-capture-active",
-                serde_json::json!({"channel":channel,"active":false}),
-            );
+            session.notifications.send(Event::CaptureActive {
+                channel,
+                active: false,
+            });
         }
         microphone_result?;
         system_result?;

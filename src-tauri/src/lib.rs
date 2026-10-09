@@ -3,6 +3,8 @@ mod assistant;
 mod command_response;
 mod context;
 mod database;
+mod desktop_events;
+mod events;
 mod meetings;
 mod permissions;
 mod screenshots;
@@ -139,6 +141,11 @@ pub fn run() {
             shortcuts::stealth_tap_stop,
             shortcuts::stealth_tap_open_settings,
             assistant::commands::analyze_transcript,
+            assistant::commands::get_question_state,
+            assistant::commands::scan_questions,
+            assistant::commands::set_questions_paused,
+            assistant::commands::dismiss_question,
+            assistant::commands::reset_questions,
             shortcuts::get_keybinds,
             shortcuts::set_keybind,
             shortcuts::reset_keybinds,
@@ -167,10 +174,9 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         let state = app.state::<state::AppState>();
                         state.stealth.stop();
-                        let _ = state.intelligence.reset();
-                        if let Err(error) =
-                            meetings::commands::end_meeting(app.clone(), app.state()).await
-                        {
+                        state.questions.stop();
+                        let _ = state.assistant.intelligence.reset();
+                        if let Err(error) = state.meetings.end().await {
                             log::error!("Unable to save meeting on exit: {error}");
                         }
                         let audio_test = state.audio_test.clone();

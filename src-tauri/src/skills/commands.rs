@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::fs;
 
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
@@ -98,32 +97,16 @@ pub async fn skills_import(
     else {
         return Ok(serde_json::json!({ "cancelled": true, "imported": [] }));
     };
-    let mut imported = Vec::new();
-    for file in files {
-        let path = file.into_path().map_err(error)?;
-        let content = fs::read_to_string(&path).map_err(error)?;
-        let fallback = path
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .unwrap_or("skill");
-        let name = frontmatter_value(&content, "name").unwrap_or(fallback);
-        let description = frontmatter_value(&content, "description").unwrap_or("");
-        state
-            .database
-            .lock()
+    let paths = files
+        .into_iter()
+        .map(|file| file.into_path().map_err(error))
+        .collect::<Result<Vec<_>, _>>()?;
+    let database = state.database.clone();
+    let imported =
+        tokio::task::spawn_blocking(move || super::service::import_files(&database, paths))
+            .await
             .map_err(error)?
-            .create_skill(name, description, &content)
             .map_err(error)?;
-        imported.push(name.to_owned());
-    }
     app.emit("skills-changed", ()).map_err(error)?;
     Ok(serde_json::json!({ "cancelled": false, "imported": imported }))
-}
-
-pub(crate) fn frontmatter_value<'a>(content: &'a str, key: &str) -> Option<&'a str> {
-    let frontmatter = content.strip_prefix("---\n")?.split_once("\n---")?.0;
-    frontmatter.lines().find_map(|line| {
-        let (name, value) = line.split_once(':')?;
-        (name.trim() == key).then(|| value.trim())
-    })
 }

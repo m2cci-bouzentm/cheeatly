@@ -19,10 +19,10 @@ pub fn initialize(app: &mut App) -> anyhow::Result<()> {
                 continue;
             }
             let content = std::fs::read_to_string(&path)?;
-            if let Some(name) = crate::skills::commands::frontmatter_value(&content, "name") {
+            if let Some(name) = crate::skills::service::frontmatter_value(&content, "name") {
                 database.seed_skill(
                     name,
-                    crate::skills::commands::frontmatter_value(&content, "description")
+                    crate::skills::service::frontmatter_value(&content, "description")
                         .unwrap_or(""),
                     &content,
                 )?;
@@ -41,7 +41,20 @@ pub fn initialize(app: &mut App) -> anyhow::Result<()> {
         .disguise_mode
         .clone()
         .unwrap_or_else(|| "none".into());
-    app.manage(AppState::new(database, settings, credentials, shortcuts));
+    let binary = crate::transcription::paths::sidecar_path(app.handle())?;
+    let events = crate::desktop_events::sink(app.handle().clone());
+    app.manage(AppState::new(
+        database,
+        settings,
+        credentials,
+        shortcuts,
+        binary,
+        events,
+    ));
+    let questions = app.state::<AppState>().questions.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::assistant::questions::QuestionService::run(&questions);
+    });
     crate::windows::create_tray(app.handle())?;
     crate::windows::apply_protection(app.handle(), protected).map_err(anyhow::Error::msg)?;
     crate::windows::apply_disguise(app.handle(), if protected { &mode } else { "none" })

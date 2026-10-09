@@ -39,6 +39,7 @@ async function openOverlay(page: Page, interval = 3600) {
       'onNativeAudioTranscript',
       'onSessionReset',
       'onQuestionAnalysisConfigChanged',
+      'onQuestionStateChanged',
       'onModelChanged',
       'onUndetectableChanged',
     ]) {
@@ -63,10 +64,47 @@ async function openOverlay(page: Page, interval = 3600) {
       interval,
       window: 2,
     });
-    w.desktopAPI.analyzeTranscript = async (text: string) => {
-      w.behavior.scans.push(text);
-      return { questions: [] };
+    w.behavior.questionState = {
+      questions: [],
+      isScanning: false,
+      scanError: '',
+      scanNotice: '',
+      settingsEnabled: true,
+      isPaused: false,
+      revision: 1,
     };
+    w.behavior.publishQuestions = (patch: any) => {
+      Object.assign(w.behavior.questionState, patch, {
+        revision: w.behavior.questionState.revision + 1,
+      });
+      w.behavior.emit('onQuestionStateChanged', {
+        ...w.behavior.questionState,
+      });
+      return { ...w.behavior.questionState };
+    };
+    w.desktopAPI.getQuestionState = async () => ({
+      ...w.behavior.questionState,
+    });
+    w.desktopAPI.scanQuestions = async () => {
+      w.behavior.scans.push('scan');
+      return w.behavior.publishQuestions({
+        scanNotice: 'Waiting for speech. Record a question, then scan again.',
+      });
+    };
+    w.desktopAPI.setQuestionsPaused = async (isPaused: boolean) => {
+      w.behavior.calls.push(['setQuestionsPaused', isPaused]);
+      return w.behavior.publishQuestions({ isPaused, isScanning: false });
+    };
+    w.desktopAPI.dismissQuestion = async (id: string) => {
+      w.behavior.calls.push(['dismissQuestion', id]);
+      return w.behavior.publishQuestions({
+        questions: w.behavior.questionState.questions.filter(
+          (q: any) => q.id !== id
+        ),
+      });
+    };
+    w.desktopAPI.resetQuestions = async () =>
+      w.behavior.publishQuestions({ questions: [] });
     w.desktopAPI.setWindowMode = async (mode: string) => {
       w.behavior.calls.push(['setWindowMode', mode]);
       window.dispatchEvent(
@@ -87,24 +125,6 @@ async function openOverlay(page: Page, interval = 3600) {
   await page.evaluate(() => {
     (window as any).behavior.calls = [];
   });
-}
-
-async function speech(
-  page: Page,
-  text: string,
-  final = true,
-  speaker = 'interviewer'
-) {
-  await page.evaluate(
-    ({ text, final, speaker }) => {
-      (window as any).behavior.emit('onNativeAudioTranscript', {
-        text,
-        final,
-        speaker,
-      });
-    },
-    { text, final, speaker }
-  );
 }
 
 async function scans(page: Page) {
@@ -235,37 +255,47 @@ for (const [label, command] of [
   });
 }
 
-test('empty manual scan explains that speech is needed without calling provider', async ({
-  page,
-}) => {
+// Scheduling, transcript windows, deduplication, retries and cancellation now live
+// in Rust QuestionService tests. Here we exercise the actual UI/IPC contract.
+test('manual scan displays backend empty-input notice', async ({ page }) => {
   await openOverlay(page);
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
   await expect(
     page.getByText('Waiting for speech. Record a question, then scan again.')
   ).toBeVisible();
-  expect(await scans(page)).toEqual([]);
+  expect(await scans(page)).toEqual(['scan']);
 });
 
-test('manual scan includes partial speech, retries errors, and deduplicates suggestions', async ({
+test('scan errors and subsequent suggestions are rendered from backend state', async ({
   page,
 }) => {
   await openOverlay(page);
   await page.evaluate(() => {
     const w = window as any;
-    w.desktopAPI.analyzeTranscript = async (text: string) => {
-      w.behavior.scans.push(text);
-      if (w.behavior.scans.length === 1)
-        throw new Error('No OpenRouter API key');
-      return {
-        questions: [
-          { text: 'How do we prevent duplicate payments?' },
-          { text: '  HOW DO WE PREVENT DUPLICATE PAYMENTS? ' },
-          { text: '' },
-        ],
-      };
+    w.desktopAPI.scanQuestions = async () => {
+      w.behavior.scans.push('scan');
+      return w.behavior.publishQuestions(
+        w.behavior.scans.length === 1
+          ? {
+              scanError:
+                'Add an OpenRouter API key in Settings → AI Providers to detect questions.',
+            }
+          : {
+              scanError: '',
+              scanNotice: 'Scan complete. 1 new suggestions.',
+              questions: [
+                {
+                  id: 'q1',
+                  speaker: 'Them',
+                  text: 'How do we prevent duplicate payments?',
+                  timestamp: 1,
+                  type: 'question',
+                },
+              ],
+            }
+      );
     };
   });
-  await speech(page, 'How do we prevent duplicate payments?', false);
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
   await expect(
     page.getByText(
@@ -276,75 +306,77 @@ test('manual scan includes partial speech, retries errors, and deduplicates sugg
   await expect(
     page.getByText('Scan complete. 1 new suggestions.')
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Scan now', exact: true }).click();
-  await expect(
-    page.getByText('Scan complete. No new suggestions.')
-  ).toBeVisible();
-  expect(await scans(page)).toEqual(
-    Array(3).fill('Them: How do we prevent duplicate payments?')
-  );
   await expect(
     page.getByText('How do we prevent duplicate payments?', { exact: true })
   ).toHaveCount(1);
+  expect(await scans(page)).toHaveLength(2);
 });
 
-test('pending scan is single flight and results from before pause are ignored', async ({
+test('backend pending state disables scan and pause invokes backend command', async ({
+  page,
+}) => {
+  await openOverlay(page);
+  await page.evaluate(() =>
+    (window as any).behavior.publishQuestions({ isScanning: true })
+  );
+  await expect(
+    page.getByRole('button', { name: 'Scan now', exact: true })
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Pause scanning' }).click();
+  await expect(page.getByText('Analysis paused')).toBeVisible();
+  await page.getByRole('button', { name: 'Resume scanning' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Scan now', exact: true })
+  ).toBeEnabled();
+  expect(
+    await page.evaluate(() =>
+      (window as any).behavior.calls.filter(
+        (call: string[]) => call[0] === 'setQuestionsPaused'
+      )
+    )
+  ).toEqual([
+    ['setQuestionsPaused', true],
+    ['setQuestionsPaused', false],
+  ]);
+});
+
+test('overlay remount hydrates backend suggestions and ignores older revisions', async ({
   page,
 }) => {
   await openOverlay(page);
   await page.evaluate(() => {
     const w = window as any;
-    w.desktopAPI.analyzeTranscript = (text: string) => {
-      w.behavior.scans.push(text);
-      return new Promise((resolve) => {
-        w.behavior.resolveScan = resolve;
-      });
-    };
+    w.behavior.publishQuestions({
+      questions: [
+        {
+          id: 'q1',
+          speaker: 'Them',
+          text: 'Retained question?',
+          timestamp: 1,
+          type: 'question',
+        },
+      ],
+    });
+    w.behavior.emit('onQuestionStateChanged', {
+      ...w.behavior.questionState,
+      revision: 0,
+      questions: [],
+    });
   });
-  await speech(page, 'Which database?');
-  const scan = page.getByRole('button', { name: 'Scan now', exact: true });
-  await scan.evaluate((node: HTMLButtonElement) => {
-    node.click();
-    node.click();
-  });
-  await expect(scan).toBeDisabled();
-  expect(await scans(page)).toHaveLength(1);
-  await page.getByRole('button', { name: 'Pause scanning' }).click();
-  await page.evaluate(() =>
-    (window as any).behavior.resolveScan({
-      questions: [{ text: 'Stale suggestion' }],
-    })
-  );
-  await expect(page.getByText('Analysis paused')).toBeVisible();
-  await page.getByRole('button', { name: 'Resume scanning' }).click();
-  await expect(page.getByText('Stale suggestion')).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Scan now', exact: true })
-  ).toBeEnabled();
-});
-
-test('automatic scans honor transcript window, unchanged-text dedup, and pause', async ({
-  page,
-}) => {
-  await page.clock.install();
-  await openOverlay(page, 2);
-  await speech(page, 'Old turn', true, 'user');
-  await speech(page, 'Recent question?');
-  await speech(page, 'Recent reply', true, 'user');
-  await page.clock.fastForward(2000);
-  await expect
-    .poll(() => scans(page))
-    .toEqual(['Them: Recent question?\nMe: Recent reply']);
-  await page.clock.fastForward(6000);
-  expect(await scans(page)).toHaveLength(1);
-  await page.getByRole('button', { name: 'Pause scanning' }).click();
-  await speech(page, 'Another question?');
-  await page.clock.fastForward(6000);
-  expect(await scans(page)).toHaveLength(1);
-  await page.getByRole('button', { name: 'Resume scanning' }).click();
-  await page.clock.fastForward(2000);
-  await expect.poll(() => scans(page)).toHaveLength(2);
-  expect((await scans(page))[1]).toBe(
-    'Me: Recent reply\nThem: Another question?'
+    page.getByText('Retained question?', { exact: true })
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).desktopAPI.setWindowMode('launcher')
   );
+  await expect(
+    page.getByRole('button', { name: 'Logo Start Cheatly' })
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).desktopAPI.setWindowMode('overlay')
+  );
+  await expect(
+    page.getByText('Retained question?', { exact: true })
+  ).toBeVisible();
+  expect(await scans(page)).toEqual([]);
 });

@@ -41,6 +41,13 @@ pub struct Database {
 }
 
 impl Database {
+    #[cfg(test)]
+    pub fn read_only_for_test(&self, enabled: bool) {
+        self.connection
+            .pragma_update(None, "query_only", enabled)
+            .unwrap();
+    }
+
     pub fn open(path: &Path) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;

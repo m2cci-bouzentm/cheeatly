@@ -151,7 +151,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   } = useServerChat();
   const isStreaming = chatStatus === 'streaming';
 
-  const [analysisPaused, setAnalysisPaused] = useState(false);
   const [questionsPanelOpen, setQuestionsPanelOpen] = useState(true);
   const [focusMode, setFocusMode] = useState(true);
 
@@ -283,17 +282,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
       setEndingMeeting(false);
     }
   };
-  const scanTurns = useMemo(
-    () => [
-      ...meeting.dialogueTurns,
-      ...(['Me', 'Them'] as const).flatMap((speaker) => {
-        const text = meeting.livePartials[speaker]?.trim();
-        return text ? [{ speaker, text }] : [];
-      }),
-    ],
-    [meeting.dialogueTurns, meeting.livePartials]
-  );
-
   const {
     questions,
     dismiss: dismissQuestion,
@@ -304,7 +292,9 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     scanError,
     scanNotice,
     settingsEnabled: questionAnalysisEnabled,
-  } = useDetectedQuestions(scanTurns, !analysisPaused);
+    isPaused: analysisPaused,
+    setPaused: setQuestionsPaused,
+  } = useDetectedQuestions();
   resetQuestionsRef.current = resetQuestions;
   const questionDetectionPaused = analysisPaused || !questionAnalysisEnabled;
 
@@ -322,8 +312,8 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   );
 
   const handleToggleAnalysis = useCallback(() => {
-    setAnalysisPaused((prev) => !prev);
-  }, []);
+    setQuestionsPaused(!analysisPaused);
+  }, [analysisPaused, setQuestionsPaused]);
 
   const renderMessageText = useMessageRenderer({
     isLightTheme,
