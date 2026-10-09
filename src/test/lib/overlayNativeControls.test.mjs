@@ -19,10 +19,13 @@ test('stop and discard await completion before returning to the launcher', () =>
   assert.match(handler, /setMeetingEndError\(String\(error\)\)/);
 });
 
-test('dragging uses native Tauri API and excludes interactive controls', () => {
+test('overlay uses built-in Tauri drag regions', () => {
+  const overlay = source('../../pages/AssistantOverlay/index.tsx');
+  const pill = source('../../components/ui/TopPill.tsx');
   const bridge = source('../../lib/desktop/tauriBridge.ts');
-  assert.match(bridge, /getCurrentWindow\(\)\.startDragging\(\)/);
-  assert.match(bridge, /closest\('button, input, textarea, select/);
+  assert.match(overlay, /data-tauri-drag-region="deep"/);
+  assert.match(pill, /data-tauri-drag-region="deep"/);
+  assert.doesNotMatch(bridge, /addEventListener\('mousedown'/);
 });
 
 test('question scans only mark a transcript processed after a successful response', () => {

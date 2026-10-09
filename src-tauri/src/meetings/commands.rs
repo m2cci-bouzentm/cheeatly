@@ -131,7 +131,7 @@ pub async fn start_meeting(
         })
         .await
         .map_err(error)?
-        .map_err(error)?;
+        .map_err(crate::permissions::capture_start_error)?;
         log::info!("Native transcription session started");
     }
     {

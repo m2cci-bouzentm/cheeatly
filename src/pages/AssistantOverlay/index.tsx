@@ -743,6 +743,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                   style={{ width: shellWidth }}
                 >
                   <Card
+                    data-tauri-drag-region="deep"
                     className={cn(
                       'flex flex-col h-full border rounded-xl overflow-hidden shadow-2xl transition-all duration-500 draggable-area',
                       isLightTheme

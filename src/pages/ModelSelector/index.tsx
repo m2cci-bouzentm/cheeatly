@@ -69,6 +69,7 @@ const ModelSelectorWindow = ({ onClose }: { onClose?: () => void }) => {
   return (
     <div className="w-fit h-fit bg-transparent flex flex-col">
       <div
+        style={{ backgroundColor: 'rgba(24, 26, 32, 0.96)' }}
         className={`w-[240px] h-[240px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left overlay-shell-surface ${panelClass}`}
       >
         <div className="relative z-[1] flex-1 min-h-0 flex flex-col">

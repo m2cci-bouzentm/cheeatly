@@ -87,6 +87,7 @@ const SettingsPopup = ({ embedded = false }: { embedded?: boolean }) => {
     <div className="w-fit h-fit bg-transparent flex flex-col">
       <div
         ref={contentRef}
+        style={{ backgroundColor: 'rgba(24, 26, 32, 0.96)' }}
         className={`w-[180px] backdrop-blur-md border rounded-[14px] overflow-hidden shadow-2xl p-1.5 flex flex-col animate-scale-in origin-top-left overlay-shell-surface ${popupPanelClass}`}
       >
         <div className="relative z-[1] flex flex-col">

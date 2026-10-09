@@ -107,3 +107,33 @@ pub fn ensure_screen_capture_permission() -> Result<(), String> {
     }
     Ok(())
 }
+
+pub fn capture_start_error(error: impl std::fmt::Display) -> String {
+    let message = error.to_string();
+    log::warn!("Capture startup failed: {message}");
+    if is_screen_consent_error(&message) {
+        if let Err(error) = open_permission_settings("screen".into()) {
+            log::warn!("Unable to open Screen Recording settings: {error}");
+        }
+        return "macOS denied Screen Recording access. Enable Cheatly in the permission pane, then quit and reopen Cheatly. If Cheatly is already enabled, remove its old entry and add /Applications/Cheatly.app again.".into();
+    }
+    message
+}
+
+fn is_screen_consent_error(message: &str) -> bool {
+    message.contains("SCStreamErrorDomain Code=-3801")
+        || message.contains("ScreenCaptureKit content callback never fired")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_screen_consent_error;
+
+    #[test]
+    fn recognizes_screen_consent_denial_without_mislabeling_device_errors() {
+        assert!(is_screen_consent_error("Error Domain=com.apple.ScreenCaptureKit.SCStreamErrorDomain Code=-3801"));
+        assert!(is_screen_consent_error("ScreenCaptureKit content callback never fired (10s)"));
+        assert!(!is_screen_consent_error("ScreenCaptureKit access denied: no display available"));
+        assert!(!is_screen_consent_error("Microphone device disconnected"));
+    }
+}

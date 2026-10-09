@@ -5,7 +5,17 @@ App under test: `/Applications/Cheatly.app`, release Tauri build on Apple Silico
 
 Tests used real accessibility clicks through `@oai/sky`; no browser mocks.
 
-## Overlay follow-up (latest installed build)
+## Credential and permission follow-up
+
+- At the user's request, copied connectAI's local OpenRouter key into Cheatly's secure provider field and saved it through the app. The key was never printed or committed. The real **Test** button returned **Connected**.
+- Typed a synthetic token-bucket question into the actual overlay and submitted with Return. A complete OpenRouter answer streamed into the UI. Discard returned to the launcher and left the two existing meetings unchanged.
+- A separate real OpenRouter request using the shipped question-detection prompt identified the synthetic API rate-limiter question. This checks the provider and prompt, **not** the live recording-to-detection UI path.
+- Toggled the stale Screen Recording entry off after the user handled macOS authentication. Installed the revised bundle, then toggled the entry back on. The latest app is waiting for fresh Keychain authorization; final recording acceptance is still incomplete.
+- Capture denial now automatically opens the Screen Recording permission pane and explains how to recover from a stale app entry. The regression test distinguishes TCC denial from device errors.
+- Visible-workspace real dragging exposed a failure in the custom handler. Replaced it with Tauri's built-in `data-tauri-drag-region="deep"`, which supports noninteractive descendants and leaves buttons usable. The installed follow-up needs the final physical drag retest after Keychain approval. Added a darker background to both dropdowns after inspecting real screenshots.
+- Follow-up validation: 35 frontend checks, 39 Rust tests, release build and bundle verification passed. Installed Swift/Core ML suite passed 10 tests with 1 existing skip. Evidence is in `tmp/final-drag-build.log`, `tmp/final-drag-unit-tests.log`, `tmp/permission-recovery-rust-tests.log`, `tmp/permission-recovery-stt-tests.log`, and `tmp/native-acceptance.json`.
+
+## Earlier overlay follow-up
 
 - All Cheatly test windows were routed to AeroSpace workspace **5**. The user's focused workspace stayed **1**.
 - Model and quick-settings menus now render inside the overlay's existing window. Real accessibility clicks opened both menus, selected GLM 4.7, restored GPT-OSS 120B, and dismissed quick settings by clicking Transcript. AeroSpace reported just one Cheatly window throughout.

@@ -30,6 +30,7 @@ export default function TopPill({
   return (
     <div className="flex justify-center select-none z-50">
       <div
+        data-tauri-drag-region="deep"
         className={cn(
           'draggable-area flex items-center gap-2 rounded-full border shadow-xl transition-all duration-500 ease-sculpted p-2 px-3',
           isLightTheme
