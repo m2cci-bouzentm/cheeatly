@@ -21,13 +21,15 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../..');
-const binaryPath = path.join(
-  projectRoot,
-  'local-stt-engine',
-  '.build',
-  'release',
-  'speech-to-text'
-);
+const binaryPath =
+  process.env.STT_BINARY_PATH ||
+  path.join(
+    projectRoot,
+    'local-stt-engine',
+    '.build',
+    'release',
+    'speech-to-text'
+  );
 
 if (process.platform !== 'darwin') {
   console.log('SKIP: Parakeet e2e tests require macOS');

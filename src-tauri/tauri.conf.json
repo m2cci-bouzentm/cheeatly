@@ -33,6 +33,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "macOS": {
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist"
+    },
     "externalBin": ["binaries/speech-to-text"],
     "resources": {
       "resources/prompts": "prompts",

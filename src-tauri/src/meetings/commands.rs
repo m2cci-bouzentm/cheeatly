@@ -110,13 +110,8 @@ pub async fn start_meeting(
     state.intelligence.reset().map_err(error)?;
     state.meeting.lock().map_err(error)?.transcript.clear();
     if provider != "none" {
-        if output_device.as_deref() == Some("sck") {
-            tauri::async_runtime::spawn_blocking(
-                crate::permissions::ensure_screen_capture_permission,
-            )
-            .await
-            .map_err(error)??;
-        }
+        // Let ScreenCaptureKit request consent itself. CoreGraphics preflight
+        // can deny access before ScreenCaptureKit gets to show its native prompt.
         let transcription = state.transcription.clone();
         let meeting_state = state.meeting.clone();
         let transcription_app = app.clone();

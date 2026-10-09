@@ -24,7 +24,8 @@ Tests used real accessibility clicks through `@oai/sky`; no browser mocks.
 - Blocking native file pickers, CoreAudio enumeration, and Keychain reads froze the UI thread.
 - Starting gave no progress/error feedback.
 - Bundle icons still contained Tauri branding; regenerated every existing icon from `assets/icon.png`.
-- ScreenCaptureKit/screenshot permission failures now request native consent and open the exact macOS pane when approval was previously denied.
+- Removed the CoreGraphics permission gate before ScreenCaptureKit startup: on this Mac, TCC logged `Service kTCCServiceScreenCapture does not allow prompting; returning denied`, preventing the actual ScreenCaptureKit request.
+- Enabled explicit bundle signing and the hardened runtime microphone entitlement. The old app had only a linker signature, a changing executable identifier, an unbound Info.plist and no sealed resources. The installed bundle now identifies as `com.cheatly.assistant` and passes strict signature verification.
 
 ## Automation detail
 
@@ -37,10 +38,11 @@ the path field; clipboard paste into the panel service can time out.
 
 - Live OpenRouter chat, cancellation, skill retrieval, question detection, generated titles and summaries: no API key configured.
 - Global hotkeys, stealth typing, content protection, tray interactions and disguise icons: not yet verified with native input.
-- Capture accuracy: the synthetic clip transcribes correctly when fed directly to the real engine, but desktop capture produced different words while other audio was playing. A later CoreAudio startup stalled in `AudioDeviceStart_mac_imp`; ScreenCaptureKit comparison was blocked by macOS TCC denial (-3801). Its failed startup cleaned up both sidecars.
+- Capture accuracy: the synthetic clip transcribes correctly when fed directly to the real engine, but desktop capture produced different words while other audio was playing. A later CoreAudio startup stalled in `AudioDeviceStart_mac_imp`; ScreenCaptureKit comparison was blocked by macOS TCC denial (-3801). Its failed startup cleaned up both sidecars. Final signed build retest is waiting on the Keychain approval described below.
 - Full cross-platform acceptance has not been performed.
 
-- Automatic permission routing was verified with a real Start click: macOS opened Screen & System Audio Recording. Both Cheatly and Codex Computer Use were listed as enabled, despite SCK reporting denial for the rebuilt app; relaunch did not clear the denial. Permission refresh requires user confirmation.
+- TCC logs confirmed Cheatly's enabled recording grant referred to an old executable hash. Toggling and re-adding did not replace it. Used the supported, app-specific `tccutil reset ScreenCapture com.cheatly.assistant`; no TCC database edits. The final signed build is installed and opens. Its real Start click initially waited in `SecKeychainFindGenericPassword`, then reached microphone startup. TCC confirms a native microphone prompt (`AUTHREQ_PROMPTING`, 12:48:01 local time). Startup subsequently reached ScreenCaptureKit and returned permission denial (-3801). Fresh System Settings inspection shows Cheatly's Screen Recording switch off. Requested user approval; Computer Use blocks the protected macOS consent application. Successful recording on this final build is **not yet verified**.
+- This build uses ad hoc signing for local installation. It is not notarized; future changed builds may require renewed macOS approval. A Developer ID identity can override the local default via `APPLE_SIGNING_IDENTITY`.
 
 ## Test state
 
@@ -55,6 +57,9 @@ permission and capture checks.
 - Real local Core ML scenarios: 10 passed, 1 existing skipped case.
 - Strict Clippy and release app build passed.
 - PDFKit and textutil extraction are exercised by the Rust native-document test using these fixtures.
+- Swift dead-code cleanup: release build and real STT suite passed (10 passed, 1 existing skip).
+- Installed bundle signature and microphone entitlement: `node tests/native/check-bundle.mjs` passed. An optional app path can be supplied to check another release bundle.
+- Final signed, installed sidecar: `STT_BINARY_PATH=/Applications/Cheatly.app/Contents/MacOS/speech-to-text node --test --test-concurrency=1 tests/stt/parakeet.e2e.test.mjs` passed (10 passed, 1 existing skip). Rust workspace rerun: 38 passed.
 
 Local ignored evidence: `tmp/native-acceptance.json`, `tmp/port-tests.log`,
 `tmp/frontend-tests.log`, `tmp/stt-tests.log`, `tmp/clippy.log`,
