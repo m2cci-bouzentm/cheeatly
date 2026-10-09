@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "Cheatly is a meeting notes app that uses AI to generate notes from your meetings.",
   "scripts": {
-    "clean": "rimraf dist src-tauri/target",
+    "clean": "rimraf dist target src-tauri/target local-stt-engine/.build playwright-report test-results",
     "dev": "vite",
     "build:frontend": "tsc && vite build",
     "build": "npm run build:frontend",
