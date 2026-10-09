@@ -85,7 +85,7 @@ function runStdioSession(pcm, opts = {}) {
     });
 
     child.stderr.setEncoding('utf8');
-    child.stderr.on('data', () => {});
+    child.stderr.on('data', (data) => process.stderr.write(`[stt] ${data}`));
 
     child.on('exit', () => {
       clearTimeout(timer);
