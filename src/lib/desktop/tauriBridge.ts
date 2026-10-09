@@ -5,11 +5,14 @@ import type { DesktopAPI } from '../../types/desktop';
 
 type EventCallback<T> = (payload: T) => void;
 
+const queuedChatStarts = new Map<string, boolean>();
+const pendingListeners = new Set<Promise<unknown>>();
+
 function on<T>(eventName: string, callback: EventCallback<T>): () => void {
   let disposed = false;
   let unlisten: (() => void) | undefined;
 
-  void listen<T>(eventName, (event: Event<T>) => callback(event.payload)).then(
+  const registration = listen<T>(eventName, (event: Event<T>) => { if (!disposed) callback(event.payload); }).then(
     (stop) => {
       if (disposed) {
         stop();
@@ -17,6 +20,12 @@ function on<T>(eventName: string, callback: EventCallback<T>): () => void {
       }
       unlisten = stop;
     }
+  );
+
+  pendingListeners.add(registration);
+  void registration.then(
+    () => pendingListeners.delete(registration),
+    (error) => { pendingListeners.delete(registration); console.error(`Unable to listen for ${eventName}`, error); },
   );
 
   return () => {
@@ -29,7 +38,7 @@ const call = <T>(command: string, args?: Record<string, unknown>): Promise<T> =>
   invoke<T>(command, args);
 
 export const desktopAPI: DesktopAPI = {
-  platform: platform() as NodeJS.Platform,
+  platform: (platform() === 'macos' ? 'darwin' : platform() === 'windows' ? 'win32' : platform()) as NodeJS.Platform,
   updateContentDimensions: (dimensions) =>
     call('update_content_dimensions', { dimensions }),
   takeScreenshot: () => call('take_screenshot'),
@@ -132,10 +141,17 @@ export const desktopAPI: DesktopAPI = {
   onMeetingsUpdated: (callback) => on('meetings-updated', callback),
   onSessionReset: (callback) => on('session-reset', callback),
   onDialogueDrained: (callback) => on('dialogue-drained', callback),
-  chatStreamStart: (streamId, messages, options) =>
-    call('chat_stream_start', { streamId, messages, options }),
+  chatStreamStart: async (streamId, messages, options) => {
+    queuedChatStarts.set(streamId, true);
+    try {
+      await Promise.all([...pendingListeners]);
+      if (!queuedChatStarts.get(streamId)) throw new DOMException('Aborted', 'AbortError');
+    } finally { queuedChatStarts.delete(streamId); }
+    return call('chat_stream_start', { streamId, messages, options });
+  },
   chatStreamAbort: (streamId) => {
-    void call('chat_stream_abort', { streamId });
+    if (queuedChatStarts.has(streamId)) { queuedChatStarts.set(streamId, false); return; }
+    void call('chat_stream_abort', { streamId }).catch(console.error);
   },
   onChatStreamEvent: (callback) => on('chat-stream-event', callback),
   openSettingsTab: (tab) => call('open_settings_tab', { tab }),

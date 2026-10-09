@@ -96,3 +96,14 @@ pub fn repair_tcc_permissions() -> serde_json::Value {
         "message": "Open System Settings and change permissions manually. macOS does not allow applications to grant themselves privacy permissions."
     })
 }
+
+pub fn ensure_screen_capture_permission() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if !ScreenCaptureAccess.preflight() && !ScreenCaptureAccess.request() {
+        // macOS only offers the initial consent prompt once. After denial, take
+        // the user directly to the matching pane instead of making them find it.
+        open_permission_settings("screen".into())?;
+        return Err("Allow Cheatly in macOS Screen Recording, then try again. If macOS asks you to restart Cheatly, reopen it first.".into());
+    }
+    Ok(())
+}

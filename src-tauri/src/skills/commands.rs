@@ -86,7 +86,10 @@ pub fn skills_remove(app: AppHandle, name: String, state: State<AppState>) -> Re
 }
 
 #[tauri::command]
-pub fn skills_import(app: AppHandle, state: State<AppState>) -> Result<serde_json::Value, String> {
+pub async fn skills_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
     let Some(files) = app
         .dialog()
         .file()
@@ -117,7 +120,7 @@ pub fn skills_import(app: AppHandle, state: State<AppState>) -> Result<serde_jso
     Ok(serde_json::json!({ "cancelled": false, "imported": imported }))
 }
 
-fn frontmatter_value<'a>(content: &'a str, key: &str) -> Option<&'a str> {
+pub(crate) fn frontmatter_value<'a>(content: &'a str, key: &str) -> Option<&'a str> {
     let frontmatter = content.strip_prefix("---\n")?.split_once("\n---")?.0;
     frontmatter.lines().find_map(|line| {
         let (name, value) = line.split_once(':')?;

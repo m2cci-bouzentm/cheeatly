@@ -11,6 +11,7 @@ mod shortcuts;
 mod skills;
 mod startup;
 mod state;
+mod stealth;
 mod transcription;
 mod windows;
 
@@ -26,14 +27,31 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             startup::initialize(app)?;
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .targets([tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::LogDir {
+                            file_name: Some("cheatly".into()),
+                        },
+                    )])
+                    .build(),
+            )?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            use tauri::Manager;
+            if let Some(state) = window.try_state::<state::AppState>() {
+                match event {
+                    tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                        state.stealth.update_bounds(window.app_handle())
+                    }
+                    tauri::WindowEvent::Destroyed | tauri::WindowEvent::CloseRequested { .. } => {
+                        state.stealth.stop()
+                    }
+                    _ => {}
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             meetings::commands::get_meeting_active,
@@ -73,8 +91,8 @@ pub fn run() {
             context::commands::context_get_files,
             context::commands::context_delete_file,
             context::commands::context_upload_file,
-            context::commands::get_intelligence_context,
-            context::commands::reset_intelligence,
+            assistant::commands::get_intelligence_context,
+            assistant::commands::reset_intelligence,
             skills::commands::skills_list,
             skills::commands::skills_get,
             skills::commands::skills_toggle,
@@ -130,6 +148,36 @@ pub fn run() {
             assistant::commands::chat_stream_start,
             assistant::commands::chat_stream_abort,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while building Tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building Tauri application")
+        .run(|app, event| {
+            use tauri::Manager;
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                let state = app.state::<state::AppState>();
+                if !state
+                    .shutting_down
+                    .swap(true, std::sync::atomic::Ordering::AcqRel)
+                {
+                    api.prevent_exit();
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = app.state::<state::AppState>();
+                        state.stealth.stop();
+                        let _ = state.intelligence.reset();
+                        if let Err(error) =
+                            meetings::commands::end_meeting(app.clone(), app.state()).await
+                        {
+                            log::error!("Unable to save meeting on exit: {error}");
+                        }
+                        let audio_test = state.audio_test.clone();
+                        let _ =
+                            tauri::async_runtime::spawn_blocking(move || audio_test.stop()).await;
+                        if let Ok(database) = state.database.lock() {
+                            let _ = database.checkpoint();
+                        }
+                        app.exit(0);
+                    });
+                }
+            }
+        });
 }

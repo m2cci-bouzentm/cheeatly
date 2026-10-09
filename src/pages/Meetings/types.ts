@@ -19,7 +19,7 @@ export interface Meeting {
 }
 
 export interface MeetingsProps {
-  onStartMeeting: () => void;
+  onStartMeeting: () => void | Promise<void>;
   onOpenSettings: (tab?: string) => void;
   onPageChange?: (isMain: boolean) => void;
 }

@@ -1,6 +1,6 @@
 import type { ChatTransport, UIMessage, UIMessageChunk } from 'ai';
 
-// Preserve useChat semantics over Electron IPC by streaming raw UIMessageChunks.
+// Preserve useChat semantics over Tauri IPC by streaming raw UIMessageChunks.
 type IpcChatBody = {
   system?: string;
 };
@@ -23,11 +23,12 @@ export class IpcChatTransport implements ChatTransport<UIMessage> {
           if (finished) return;
           finished = true;
           off();
+          options.abortSignal?.removeEventListener('abort', abort);
           fn();
         };
 
         const off = window.desktopAPI.onChatStreamEvent((evt) => {
-          if (evt.streamId !== streamId) return;
+          if (finished || evt.streamId !== streamId) return;
           if (evt.type === 'chunk') {
             controller.enqueue(evt.chunk as UIMessageChunk);
             return;
@@ -41,9 +42,12 @@ export class IpcChatTransport implements ChatTransport<UIMessage> {
           );
         });
 
-        options.abortSignal?.addEventListener('abort', () => {
+        const abort = () => {
           window.desktopAPI.chatStreamAbort(streamId);
-        });
+          finish(() => controller.close());
+        };
+        options.abortSignal?.addEventListener('abort', abort, { once: true });
+        if (options.abortSignal?.aborted) { abort(); return; }
 
         window.desktopAPI
           .chatStreamStart(streamId, options.messages, {

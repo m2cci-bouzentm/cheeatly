@@ -7,6 +7,7 @@ use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 pub fn take_screenshot(app: AppHandle) -> Result<Value, String> {
+    crate::permissions::ensure_screen_capture_permission()?;
     let screen = Screen::from_point(0, 0).map_err(|error| error.to_string())?;
     let image = screen.capture().map_err(|error| error.to_string())?;
     let directory = app

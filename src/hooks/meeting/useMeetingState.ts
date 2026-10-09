@@ -215,7 +215,15 @@ export const useMeetingState = ({
 
     window.desktopAPI
       .getNativeAudioStatus()
-      .then((status) => setIsConnected(status.connected))
+      .then((status) => {
+        setIsConnected(status.connected);
+        setMicCaptureActive(status.connected);
+        setSystemCaptureActive(status.connected);
+        setMicMuted(status.micMuted ?? false);
+        setSystemMuted(status.systemMuted ?? false);
+        if (status.transcript?.length) setDialogueTurns(status.transcript);
+        if (status.connected) { setSttUserStatus('connected'); setSttInterviewerStatus('connected'); }
+      })
       .catch(() => setIsConnected(false));
 
     cleanups.push(

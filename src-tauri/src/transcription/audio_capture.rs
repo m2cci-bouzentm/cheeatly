@@ -26,7 +26,8 @@ pub struct MicrophoneCapture {
 impl MicrophoneCapture {
     pub fn start(
         device_id: Option<String>,
-        output: mpsc::Sender<AudioChunk>,
+        output: mpsc::SyncSender<AudioChunk>,
+        muted: Arc<[AtomicBool; 2]>,
     ) -> anyhow::Result<Self> {
         let mut stream = MicrophoneStream::new(device_id)?;
         let sample_rate = stream.sample_rate();
@@ -46,8 +47,11 @@ impl MicrophoneCapture {
                 while let Some(sample) = consumer.try_pop() {
                     input.push(sample);
                     if input.len() >= (sample_rate / 20) as usize {
-                        if let Ok(pcm16) = resampler.resample_to_i16(&input) {
-                            let _ = output.send(AudioChunk {
+                        if let Ok(mut pcm16) = resampler.resample_to_i16(&input) {
+                            if muted[0].load(Ordering::Acquire) {
+                                pcm16.fill(0);
+                            }
+                            let _ = output.try_send(AudioChunk {
                                 source: AudioSource::Microphone,
                                 pcm16,
                                 sample_rate: cheatly_audio::TRANSCRIPTION_SAMPLE_RATE,
@@ -91,7 +95,8 @@ pub struct SystemAudioCapture {
 impl SystemAudioCapture {
     pub fn start(
         device_id: Option<String>,
-        output: mpsc::Sender<AudioChunk>,
+        output: mpsc::SyncSender<AudioChunk>,
+        muted: Arc<[AtomicBool; 2]>,
     ) -> anyhow::Result<Self> {
         let mut stream = SpeakerInput::new(device_id)?.stream()?;
         let sample_rate = stream.sample_rate();
@@ -110,8 +115,11 @@ impl SystemAudioCapture {
                 while let Some(sample) = consumer.try_pop() {
                     input.push(sample);
                     if input.len() >= (sample_rate / 20) as usize {
-                        if let Ok(pcm16) = resampler.resample_to_i16(&input) {
-                            let _ = output.send(AudioChunk {
+                        if let Ok(mut pcm16) = resampler.resample_to_i16(&input) {
+                            if muted[1].load(Ordering::Acquire) {
+                                pcm16.fill(0);
+                            }
+                            let _ = output.try_send(AudioChunk {
                                 source: AudioSource::System,
                                 pcm16,
                                 sample_rate: cheatly_audio::TRANSCRIPTION_SAMPLE_RATE,

@@ -45,12 +45,22 @@ pub fn set_undetectable(
     state: State<AppState>,
     value: bool,
 ) -> Result<serde_json::Value, String> {
+    crate::windows::apply_protection(&app, value)?;
     state
         .settings
         .lock()
         .map_err(error)?
         .update(|settings| settings.is_undetectable = Some(value))
         .map_err(error)?;
+    let mode = state
+        .settings
+        .lock()
+        .map_err(error)?
+        .values()
+        .disguise_mode
+        .clone()
+        .unwrap_or_else(|| "none".into());
+    crate::windows::apply_disguise(&app, if value { &mode } else { "none" })?;
     app.emit("undetectable-changed", value).map_err(error)?;
     Ok(json!({ "success": true, "state": value }))
 }
@@ -73,12 +83,18 @@ pub fn set_disguise(
     state: State<AppState>,
     mode: String,
 ) -> Result<Success, String> {
+    if !matches!(mode.as_str(), "none" | "terminal" | "settings" | "activity") {
+        return Err("Unknown disguise".into());
+    }
     state
         .settings
         .lock()
         .map_err(error)?
         .update(|settings| settings.disguise_mode = Some(mode.clone()))
         .map_err(error)?;
+    if get_undetectable(state)? {
+        crate::windows::apply_disguise(&app, &mode)?;
+    }
     app.emit("disguise-changed", mode).map_err(error)?;
     Ok(Success::new())
 }
@@ -106,26 +122,41 @@ pub fn set_verbose_logging(state: State<AppState>, enabled: bool) -> Result<Succ
 }
 
 #[tauri::command]
-pub fn get_question_analysis_config(
-    state: State<AppState>,
+pub async fn get_question_analysis_config(
+    state: State<'_, AppState>,
 ) -> Result<QuestionAnalysisConfig, String> {
+    let credentials = state.credentials.load_async().await.map_err(error)?;
     let settings = state.settings.lock().map_err(error)?;
     let values = settings.values();
     Ok(QuestionAnalysisConfig {
         enabled: values.question_analysis_enabled.unwrap_or(true),
         interval: values.question_analysis_interval.unwrap_or(20),
         model: values.question_analysis_model.clone().unwrap_or_default(),
-        open_router_api_key: String::new(),
+        open_router_api_key: if credentials.question_analysis_api_key.is_some() {
+            "stored".into()
+        } else {
+            String::new()
+        },
         window: values.question_analysis_window.unwrap_or(20),
     })
 }
 
 #[tauri::command]
-pub fn set_question_analysis_config(
+pub async fn set_question_analysis_config(
     app: AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
     config: QuestionAnalysisUpdate,
 ) -> Result<Success, String> {
+    if let Some(key) = &config.open_router_api_key {
+        let mut credentials = state.credentials.load_async().await.map_err(error)?;
+        credentials.question_analysis_api_key =
+            (!key.trim().is_empty()).then(|| key.trim().to_owned());
+        state
+            .credentials
+            .save_async(credentials)
+            .await
+            .map_err(error)?;
+    }
     state
         .settings
         .lock()
@@ -143,10 +174,9 @@ pub fn set_question_analysis_config(
             if let Some(value) = config.window.filter(|value| (5..=100).contains(value)) {
                 settings.question_analysis_window = Some(value);
             }
-            let _ = config.open_router_api_key;
         })
         .map_err(error)?;
-    let current = get_question_analysis_config(state)?;
+    let current = get_question_analysis_config(state).await?;
     app.emit(
         "question-analysis-config-changed",
         json!({ "enabled": current.enabled, "interval": current.interval }),
@@ -162,5 +192,12 @@ pub fn get_arch() -> String {
 
 #[tauri::command]
 pub fn get_os_version() -> String {
+    #[cfg(target_os = "macos")]
+    if let Ok(output) = std::process::Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+    {
+        return String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    }
     std::env::consts::OS.into()
 }

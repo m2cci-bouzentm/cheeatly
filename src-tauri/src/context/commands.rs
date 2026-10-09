@@ -62,14 +62,17 @@ pub fn context_delete_file(id: String, state: State<AppState>) -> Result<Success
 }
 
 #[tauri::command]
-pub fn context_upload_file(
+pub async fn context_upload_file(
     app: AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     let Some(file) = app
         .dialog()
         .file()
-        .add_filter("Documents", &["txt", "md", "json", "csv", "xml", "html"])
+        .add_filter(
+            "Documents",
+            &["txt", "md", "json", "csv", "xml", "html", "pdf", "docx"],
+        )
         .blocking_pick_file()
     else {
         return Ok(json!({ "success": false, "cancelled": true }));
@@ -79,7 +82,7 @@ pub fn context_upload_file(
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| "Invalid filename".to_string())?;
-    let content = fs::read_to_string(&source).map_err(error)?;
+    let content = super::documents::read(&source).map_err(error)?;
     let storage = app.path().app_data_dir().map_err(error)?.join("context");
     fs::create_dir_all(&storage).map_err(error)?;
     let destination = storage.join(format!("{}-{}", uuid::Uuid::new_v4(), filename));
@@ -91,14 +94,4 @@ pub fn context_upload_file(
         .create_context_file(filename, destination.to_string_lossy().as_ref())
         .map_err(error)?;
     Ok(json!({ "success": true, "file": file }))
-}
-
-#[tauri::command]
-pub fn get_intelligence_context() -> serde_json::Value {
-    json!({ "context": "", "lastAssistantMessage": null, "activeMode": "default" })
-}
-
-#[tauri::command]
-pub fn reset_intelligence() -> Success {
-    Success::new()
 }

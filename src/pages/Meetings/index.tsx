@@ -23,6 +23,7 @@ const Meetings: React.FC<MeetingsProps> = ({
   onOpenSettings,
   onPageChange,
 }) => {
+  const [isStarting, setIsStarting] = useState(false);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isDetectable, setIsDetectable] = useState(false);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
@@ -349,7 +350,8 @@ const Meetings: React.FC<MeetingsProps> = ({
                     <div className="flex-1 mx-4" />
 
                     <motion.button
-                      onClick={() => {
+                      disabled={isStarting}
+                      onClick={async () => {
                         if (isMeetingActive) {
                           // setWindowMode restores overlay mode without stealing foreground focus.
                           window.desktopAPI.setWindowMode('overlay', true);
@@ -358,7 +360,8 @@ const Meetings: React.FC<MeetingsProps> = ({
                           );
                           return;
                         }
-                        onStartMeeting();
+                        setIsStarting(true);
+                        try { await onStartMeeting(); } finally { setIsStarting(false); }
                         analytics.trackCommandExecuted('start_cheatly_cta');
                       }}
                       data-testid="start-meeting"
@@ -417,7 +420,7 @@ const Meetings: React.FC<MeetingsProps> = ({
                                 className="w-[18px] h-[18px] object-contain opacity-90"
                               />
                               <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.1)] text-lg leading-none">
-                                Start Cheatly
+                                {isStarting ? 'Starting…' : 'Start Cheatly'}
                               </span>
                             </motion.div>
                           )}

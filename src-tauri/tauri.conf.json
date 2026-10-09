@@ -36,7 +36,8 @@
     "externalBin": ["binaries/speech-to-text"],
     "resources": {
       "resources/prompts": "prompts",
-      "resources/skills": "skills"
+      "resources/skills": "skills",
+      "../assets/fakeicon": "fakeicon"
     },
     "icon": [
       "icons/32x32.png",

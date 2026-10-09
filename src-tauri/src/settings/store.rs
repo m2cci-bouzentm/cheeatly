@@ -40,12 +40,14 @@ impl SettingsStore {
     }
 
     pub fn update(&mut self, update: impl FnOnce(&mut AppSettings)) -> anyhow::Result<()> {
-        update(&mut self.values);
+        let mut values = self.values.clone();
+        update(&mut values);
         let parent = self.path.parent().context("settings path has no parent")?;
         fs::create_dir_all(parent)?;
         let temporary = self.path.with_extension("json.tmp");
-        fs::write(&temporary, serde_json::to_vec_pretty(&self.values)?)?;
+        fs::write(&temporary, serde_json::to_vec_pretty(&values)?)?;
         fs::rename(temporary, &self.path)?;
+        self.values = values;
         Ok(())
     }
 }

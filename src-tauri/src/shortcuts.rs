@@ -55,6 +55,11 @@ impl ShortcutStore {
             .collect())
     }
     pub fn set(&self, id: &str, accelerator: String) -> Result<bool, String> {
+        if !accelerator.is_empty() {
+            accelerator
+                .parse::<tauri_plugin_global_shortcut::Shortcut>()
+                .map_err(|e| e.to_string())?;
+        }
         let mut values = self.values.lock().map_err(|error| error.to_string())?;
         if values
             .values()
@@ -83,11 +88,14 @@ impl ShortcutStore {
                 keybind.accelerator.as_str(),
                 move |app, _, event| {
                     if event.state == ShortcutState::Pressed {
-                        let _ =
-                            app.emit("global-shortcut", serde_json::json!({ "action": action }));
+                        dispatch(app, &action);
                     }
                 },
             ) {
+                let _ = app.emit(
+                    "keybind-registration-failed",
+                    serde_json::json!({"id":keybind.id,"accelerator":keybind.accelerator}),
+                );
                 log::warn!(
                     "Failed to register shortcut {} ({}): {}",
                     keybind.id,
@@ -140,20 +148,20 @@ pub fn reset_keybinds(
 }
 #[tauri::command]
 pub fn stealth_tap_available() -> bool {
-    false
+    cfg!(target_os = "macos")
 }
 #[tauri::command]
-pub fn stealth_tap_start() -> bool {
-    false
+pub fn stealth_tap_start(
+    app: AppHandle,
+    state: tauri::State<crate::state::AppState>,
+) -> Result<bool, String> {
+    state.stealth.start(app)
 }
 #[tauri::command]
-pub fn stealth_tap_stop(app: AppHandle) -> Result<(), String> {
-    app.emit(
-        "stealth-tap-state",
-        serde_json::json!({ "active": false, "reason": "stopped" }),
-    )
-    .map_err(|error| error.to_string())
+pub fn stealth_tap_stop(state: tauri::State<crate::state::AppState>) {
+    state.stealth.stop();
 }
+
 #[tauri::command]
 pub fn stealth_tap_open_settings() -> Result<(), String> {
     std::process::Command::new("/usr/bin/open")
@@ -241,4 +249,44 @@ fn defaults() -> Vec<Keybind> {
         default_accelerator: accelerator.into(),
     })
     .collect()
+}
+
+fn dispatch(app: &AppHandle, action: &str) {
+    use tauri::Manager;
+    let result = match action {
+        "general:toggle-visibility" => crate::windows::toggle_window(app.clone()),
+        "window:move-up" => crate::windows::move_window_up(app.clone()),
+        "window:move-down" => crate::windows::move_window_down(app.clone()),
+        "window:move-left" => crate::windows::move_window_left(app.clone()),
+        "window:move-right" => crate::windows::move_window_right(app.clone()),
+        "general:capture-and-process" => app
+            .emit_to("main", "capture-and-process", ())
+            .map_err(|e| e.to_string()),
+        "chat:focusInput" if cfg!(target_os = "macos") => {
+            let state = app.state::<crate::state::AppState>();
+            if state.stealth.is_active() {
+                state.stealth.stop();
+                Ok(())
+            } else {
+                state.stealth.start(app.clone()).map(|_| ())
+            }
+        }
+        _ => {
+            let action = match action {
+                "general:process-screenshots" => "processScreenshots",
+                "general:reset-cancel" => "resetCancel",
+                "general:take-screenshot" => "takeScreenshot",
+                other => other.strip_prefix("chat:").unwrap_or(other),
+            };
+            app.emit_to(
+                "main",
+                "global-shortcut",
+                serde_json::json!({"action":action}),
+            )
+            .map_err(|e| e.to_string())
+        }
+    };
+    if let Err(error) = result {
+        log::warn!("Shortcut failed: {error}");
+    }
 }

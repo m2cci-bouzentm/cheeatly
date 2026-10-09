@@ -150,6 +150,34 @@ impl Database {
         Ok(())
     }
 
+    pub fn save_generated_summary(
+        &self,
+        id: &str,
+        revision: &str,
+        title: &str,
+        summary: &str,
+    ) -> anyhow::Result<()> {
+        let changed = self.connection.execute(
+            "UPDATE Meeting SET title = ?1, summary = ?2, updatedAt = ?3 WHERE id = ?4 AND updatedAt = ?5",
+            params![title, summary, Utc::now().to_rfc3339(), id, revision],
+        )?;
+        anyhow::ensure!(
+            changed == 1,
+            "Meeting changed or was removed while generating summary"
+        );
+        Ok(())
+    }
+
+    pub fn checkpoint(&self) -> anyhow::Result<()> {
+        let (busy, _, _): (i32, i32, i32) =
+            self.connection
+                .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?;
+        anyhow::ensure!(busy == 0, "Database checkpoint blocked by an active reader");
+        Ok(())
+    }
+
     pub fn delete_meeting(&self, id: &str) -> anyhow::Result<()> {
         self.connection
             .execute("DELETE FROM Meeting WHERE id = ?1", [id])?;
@@ -246,6 +274,11 @@ impl Database {
             .optional()?)
     }
 
+    pub fn seed_skill(&self, name: &str, description: &str, content: &str) -> anyhow::Result<()> {
+        self.connection.execute("INSERT OR IGNORE INTO Skill(id,name,description,content,enabled,bundled,createdAt,updatedAt) VALUES (?1,?2,?3,?4,1,1,?5,?5)", params![uuid::Uuid::new_v4().to_string(), name, description, content, Utc::now().to_rfc3339()])?;
+        Ok(())
+    }
+
     pub fn create_skill(&self, name: &str, description: &str, content: &str) -> anyhow::Result<()> {
         let now = Utc::now().to_rfc3339();
         self.connection.execute(
@@ -289,6 +322,12 @@ impl Database {
     }
 
     pub fn remove_skill(&self, name: &str) -> anyhow::Result<()> {
+        let bundled: bool = self.connection.query_row(
+            "SELECT bundled FROM Skill WHERE name = ?1",
+            [name],
+            |row| row.get(0),
+        )?;
+        anyhow::ensure!(!bundled, "Bundled skills cannot be deleted");
         self.connection
             .execute("DELETE FROM Skill WHERE name = ?1 AND bundled = 0", [name])?;
         Ok(())
@@ -320,5 +359,24 @@ mod tests {
         database.save_context_description("Sales context").unwrap();
 
         assert_eq!(database.context_description().unwrap(), "Sales context");
+    }
+    #[test]
+    fn checkpoint_preserves_data_on_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("check.db");
+        let database = Database::open(&path).unwrap();
+        database.create_meeting("one", "Me: Still here").unwrap();
+        database.checkpoint().unwrap();
+        database.checkpoint().unwrap();
+        drop(database);
+        assert_eq!(
+            Database::open(&path)
+                .unwrap()
+                .get_meeting("one")
+                .unwrap()
+                .transcript
+                .as_deref(),
+            Some("Me: Still here")
+        );
     }
 }

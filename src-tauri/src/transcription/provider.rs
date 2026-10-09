@@ -75,6 +75,49 @@ pub fn filter_transcript(text: &str) -> String {
     }
 }
 
+// The sidecar's final event repeats all committed text. Only emit its remainder.
+#[derive(Default)]
+pub struct TranscriptReconciler {
+    committed: String,
+}
+
+impl TranscriptReconciler {
+    pub fn accept(&mut self, kind: &str, text: &str) -> Option<(String, bool)> {
+        let cleaned = filter_transcript(text);
+        if cleaned.is_empty() {
+            return None;
+        }
+        let normalize = |text: &str| {
+            text.chars()
+                .filter(|c| c.is_alphanumeric() || *c == '$' || *c == '%')
+                .flat_map(char::to_lowercase)
+                .collect::<String>()
+        };
+        let prior = normalize(&self.committed);
+        let words = cleaned.split_whitespace().collect::<Vec<_>>();
+        let mut consumed = String::new();
+        let mut skip = 0;
+        if !prior.is_empty() {
+            for word in &words {
+                let next = format!("{consumed}{}", normalize(word));
+                if !prior.starts_with(&next) {
+                    break;
+                }
+                consumed = next;
+                skip += 1;
+            }
+        }
+        let remainder = words[skip..].join(" ");
+        if kind == "committed" {
+            if !self.committed.is_empty() {
+                self.committed.push(' ');
+            }
+            self.committed.push_str(&cleaned);
+        }
+        (!remainder.is_empty()).then_some((remainder, kind != "partial"))
+    }
+}
+
 pub trait TranscriptionProvider: Send {
     fn start(
         &mut self,
@@ -87,7 +130,24 @@ pub trait TranscriptionProvider: Send {
 
 #[cfg(test)]
 mod tests {
-    use super::filter_transcript;
+    use super::{TranscriptReconciler, filter_transcript};
+
+    #[test]
+    fn committed_speech_is_final_and_terminal_replay_is_removed() {
+        let mut r = TranscriptReconciler::default();
+        assert_eq!(
+            r.accept("committed", "Budget is ready."),
+            Some(("Budget is ready.".into(), true))
+        );
+        assert_eq!(
+            r.accept("partial", "Budget is ready. Review tomorrow"),
+            Some(("Review tomorrow".into(), false))
+        );
+        assert_eq!(
+            r.accept("final", "Budget is ready. Review tomorrow."),
+            Some(("Review tomorrow.".into(), true))
+        );
+    }
 
     #[test]
     fn drops_whole_segment_silence_artifacts() {

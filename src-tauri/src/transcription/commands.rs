@@ -1,6 +1,6 @@
 use serde::Serialize;
 use serde_json::{Value, json};
-use tauri::{Manager, State};
+use tauri::{Emitter, State};
 
 use crate::{command_response::Success, state::AppState};
 
@@ -15,8 +15,10 @@ pub struct AudioDevice {
 }
 
 #[tauri::command]
-pub fn get_input_devices() -> Result<Vec<AudioDevice>, String> {
-    cheatly_audio::microphone::list_input_devices()
+pub async fn get_input_devices() -> Result<Vec<AudioDevice>, String> {
+    tauri::async_runtime::spawn_blocking(cheatly_audio::microphone::list_input_devices)
+        .await
+        .map_err(error)?
         .map(|devices| {
             devices
                 .into_iter()
@@ -27,8 +29,10 @@ pub fn get_input_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 #[tauri::command]
-pub fn get_output_devices() -> Result<Vec<AudioDevice>, String> {
-    cheatly_audio::speaker::list_output_devices()
+pub async fn get_output_devices() -> Result<Vec<AudioDevice>, String> {
+    tauri::async_runtime::spawn_blocking(cheatly_audio::speaker::list_output_devices)
+        .await
+        .map_err(error)?
         .map(|devices| {
             devices
                 .into_iter()
@@ -49,6 +53,9 @@ pub fn set_channel_muted(
     muted: bool,
     state: State<AppState>,
 ) -> Result<Success, String> {
+    if !matches!(channel.as_str(), "mic" | "system") {
+        return Err("Unknown audio channel".into());
+    }
     state
         .settings
         .lock()
@@ -59,54 +66,90 @@ pub fn set_channel_muted(
             _ => {}
         })
         .map_err(error)?;
+    state
+        .transcription
+        .set_muted(&channel, muted)
+        .map_err(error)?;
     Ok(Success::new())
 }
 
 #[tauri::command]
-pub fn get_native_audio_status(state: State<AppState>) -> Value {
-    json!({ "connected": state.transcription.active() })
+pub async fn get_native_audio_status(state: State<'_, AppState>) -> Result<Value, String> {
+    let session = state.transcription.clone();
+    let active = tauri::async_runtime::spawn_blocking(move || session.active())
+        .await
+        .map_err(error)?;
+    let transcript = state
+        .meeting
+        .lock()
+        .map(|m| m.transcript.clone())
+        .unwrap_or_default();
+    let settings = state.settings.lock().ok();
+    Ok(
+        json!({ "connected": active, "transcript": transcript, "micMuted": settings.as_ref().and_then(|s| s.values().mic_muted).unwrap_or(false), "systemMuted": settings.as_ref().and_then(|s| s.values().system_muted).unwrap_or(false) }),
+    )
 }
 
 #[tauri::command]
-pub fn start_audio_test(
+pub async fn start_audio_test(
     app: tauri::AppHandle,
     device_id: Option<String>,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<Success, String> {
-    state.audio_test.start(&app, device_id).map_err(error)?;
+    let session = state.audio_test.clone();
+    tauri::async_runtime::spawn_blocking(move || session.start(&app, device_id))
+        .await
+        .map_err(error)?
+        .map_err(error)?;
     Ok(Success::new())
 }
 
 #[tauri::command]
-pub fn stop_audio_test(state: State<AppState>) -> Result<Success, String> {
-    state.audio_test.stop().map_err(error)?;
+pub async fn stop_audio_test(state: State<'_, AppState>) -> Result<Success, String> {
+    let session = state.audio_test.clone();
+    tauri::async_runtime::spawn_blocking(move || session.stop())
+        .await
+        .map_err(error)?
+        .map_err(error)?;
     Ok(Success::new())
 }
 
 #[tauri::command]
-pub fn local_parakeet_get_config(
+pub async fn local_parakeet_get_config(
     app: tauri::AppHandle,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let settings = state.settings.lock().map_err(error)?;
-    let binary = app
-        .path()
-        .resolve("speech-to-text", tauri::path::BaseDirectory::Executable)
-        .map_err(error)?;
-    let output = std::process::Command::new(binary)
-        .arg("list-models")
-        .output()
-        .map_err(error)?;
+    let settings = state.settings.lock().map_err(error)?.values().clone();
+    let binary = super::local_coreml::sidecar_path(&app).map_err(error)?;
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(binary)
+            .arg("list-models")
+            .output()
+    })
+    .await
+    .map_err(error)?
+    .map_err(error)?;
+    if !output.status.success() {
+        return Err("Unable to list local models".into());
+    }
     let models: Value = serde_json::from_slice(&output.stdout).map_err(error)?;
     Ok(json!({
-        "modelId": settings.values().parakeet_model.clone().unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
-        "language": settings.values().parakeet_language.clone().unwrap_or_else(|| "auto".into()),
+        "modelId": settings.parakeet_model.clone().unwrap_or_else(|| "parakeet-tdt-0.6b-v3".into()),
+        "language": settings.parakeet_language.clone().unwrap_or_else(|| "auto".into()),
         "models": models
     }))
 }
 
 #[tauri::command]
 pub fn local_parakeet_set_config(config: Value, state: State<AppState>) -> Result<Success, String> {
+    if let Some(model) = config.get("modelId").and_then(Value::as_str) {
+        validate_model(model)?;
+    }
+    if let Some(language) = config.get("language").and_then(Value::as_str)
+        && !matches!(language, "auto" | "english")
+    {
+        return Err("Unknown recognition language".into());
+    }
     state
         .settings
         .lock()
@@ -124,20 +167,69 @@ pub fn local_parakeet_set_config(config: Value, state: State<AppState>) -> Resul
 }
 
 #[tauri::command]
-pub fn local_parakeet_download_model(
+pub async fn local_parakeet_download_model(
     app: tauri::AppHandle,
     model_id: String,
 ) -> Result<Success, String> {
-    let binary = app
-        .path()
-        .resolve("speech-to-text", tauri::path::BaseDirectory::Executable)
-        .map_err(error)?;
-    let status = std::process::Command::new(binary)
-        .args(["download-model", "--model", &model_id])
-        .status()
-        .map_err(error)?;
-    if !status.success() {
-        return Err(format!("model download exited with {status}"));
+    validate_model(&model_id)?;
+    let event_app = app.clone();
+    let event_model = model_id.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
+        let binary = super::local_coreml::sidecar_path(&app).map_err(error)?;
+        let mut child = Command::new(binary)
+            .args(["download-model", "--model", &model_id])
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(error)?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or("Model download output unavailable")?;
+        for line in BufReader::new(stdout).lines() {
+            let line = line.map_err(error)?;
+            if let Ok(value) = serde_json::from_str::<Value>(&line)
+                && let Some(message) = value.get("message").and_then(Value::as_str)
+            {
+                let _ = app.emit(
+                    "local-parakeet-download-status",
+                    json!({"modelId":model_id,"message":message}),
+                );
+            }
+        }
+        let status = child.wait().map_err(error)?;
+        if !status.success() {
+            return Err(format!("Model download exited with {status}"));
+        }
+        Ok(())
+    })
+    .await
+    .map_err(error)?;
+    match result {
+        Ok(()) => {
+            event_app
+                .emit(
+                    "local-parakeet-download-complete",
+                    json!({"modelId":event_model}),
+                )
+                .map_err(error)?;
+            Ok(Success::new())
+        }
+        Err(message) => {
+            let _ = event_app.emit(
+                "local-parakeet-download-error",
+                json!({"modelId":event_model,"error":message}),
+            );
+            Err(message)
+        }
     }
-    Ok(Success::new())
+}
+
+fn validate_model(model: &str) -> Result<(), String> {
+    if matches!(model, "parakeet-tdt-0.6b-v2" | "parakeet-tdt-0.6b-v3") {
+        Ok(())
+    } else {
+        Err("Unknown local model".into())
+    }
 }

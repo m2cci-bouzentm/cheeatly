@@ -21,15 +21,21 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 const queryClient = new QueryClient();
 
 const App: React.FC = () => {
-  const isSettingsWindow =
-    new URLSearchParams(window.location.search).get('window') === 'settings';
-  const isLauncherWindow =
-    new URLSearchParams(window.location.search).get('window') === 'launcher';
-  const isOverlayWindow =
-    new URLSearchParams(window.location.search).get('window') === 'overlay';
-  const isModelSelectorWindow =
-    new URLSearchParams(window.location.search).get('window') ===
-    'model-selector';
+  const [windowMode, setWindowMode] = useState(() => new URLSearchParams(window.location.search).get('window') || 'launcher');
+  useEffect(() => {
+    const changeMode = (event: Event) => {
+      const mode = (event as CustomEvent<string>).detail;
+      if (mode !== 'launcher' && mode !== 'overlay') return;
+      history.replaceState(null, '', mode === 'launcher' ? '/' : '/?window=overlay');
+      setWindowMode(mode);
+    };
+    window.addEventListener('cheatly-window-mode', changeMode);
+    return () => window.removeEventListener('cheatly-window-mode', changeMode);
+  }, []);
+  const isSettingsWindow = windowMode === 'settings';
+  const isLauncherWindow = windowMode === 'launcher';
+  const isOverlayWindow = windowMode === 'overlay';
+  const isModelSelectorWindow = windowMode === 'model-selector';
 
   const isDefault =
     !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow;
@@ -60,9 +66,9 @@ const App: React.FC = () => {
     };
   }, [isLauncherWindow, isOverlayWindow, isDefault]);
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(new URLSearchParams(window.location.search).has('settingsTab'));
   const [settingsInitialTab, setSettingsInitialTab] =
-    useState<string>('general');
+    useState<string>(new URLSearchParams(window.location.search).get('settingsTab') || 'general');
   const openSettingsExclusive = useCallback((tab: string = 'general') => {
     setSettingsInitialTab(tab);
     setIsSettingsOpen(true);
@@ -114,7 +120,9 @@ const App: React.FC = () => {
     };
   }, [isOverlayWindow]);
 
+  const [startError, setStartError] = useState('');
   const handleStartMeeting = async () => {
+    setStartError('');
     try {
       localStorage.setItem('cheatly_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
@@ -139,9 +147,9 @@ const App: React.FC = () => {
         analytics.trackMeetingStarted();
         return;
       }
-      console.error('Failed to start meeting:', result.error);
+      setStartError(result.error || 'Unable to start meeting');
     } catch (err) {
-      console.error('Failed to start meeting:', err);
+      setStartError(String(err));
     }
   };
 
@@ -224,6 +232,7 @@ const App: React.FC = () => {
                 />
               ) : (
                 <div id="launcher-container" className="h-full w-full relative">
+                  {startError && <div role="alert" className="px-4 py-2 text-sm text-red-400">{startError}</div>}
                   <Launcher
                     onStartMeeting={handleStartMeeting}
                     onOpenSettings={(tab = 'general') =>

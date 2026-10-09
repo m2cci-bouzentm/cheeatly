@@ -1,15 +1,18 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 
-use crate::{command_response::Success, database::Database, state::AppState};
+use crate::{command_response::Success, state::AppState};
 
 fn error(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-fn map_meeting(row: crate::database::MeetingRow) -> Value {
+fn map_meeting(
+    row: crate::database::MeetingRow,
+    summary_status: super::summary::SummaryStatus,
+) -> Value {
     let transcript = row
         .transcript
         .unwrap_or_default()
@@ -29,7 +32,7 @@ fn map_meeting(row: crate::database::MeetingRow) -> Value {
     json!({
         "id": row.id,
         "title": row.title.unwrap_or_else(|| "Untitled Session".into()),
-        "summaryStatus": if summary.is_empty() { "pending" } else { "complete" },
+        "summaryStatus": summary_status,
         "date": row.created_at,
         "duration": "0:00",
         "summary": summary,
@@ -55,6 +58,7 @@ pub async fn start_meeting(
     state: State<'_, AppState>,
     metadata: Option<Value>,
 ) -> Result<Success, String> {
+    let _lifecycle = state.meeting_lifecycle.lock().await;
     if state.meeting.lock().map_err(error)?.active {
         return Err("A meeting is already active".into());
     }
@@ -68,8 +72,28 @@ pub async fn start_meeting(
         .and_then(|value| value.pointer("/audio/outputDeviceId"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
+    let credentials_service = state.credentials.clone();
+    let credentials = tauri::async_runtime::spawn_blocking(move || credentials_service.load())
+        .await
+        .map_err(error)?
+        .map_err(error)?;
+    let provider = credentials
+        .stt_provider
+        .as_deref()
+        .unwrap_or("local-parakeet");
+    if !matches!(provider, "none" | "local-parakeet") {
+        return Err("Unsupported STT provider".into());
+    }
     let (model, language) = {
         let settings = state.settings.lock().map_err(error)?;
+        state
+            .transcription
+            .set_muted("mic", settings.values().mic_muted.unwrap_or(false))
+            .map_err(error)?;
+        state
+            .transcription
+            .set_muted("system", settings.values().system_muted.unwrap_or(false))
+            .map_err(error)?;
         (
             settings
                 .values()
@@ -83,31 +107,41 @@ pub async fn start_meeting(
                 .unwrap_or_else(|| "auto".into()),
         )
     };
-    let transcription = state.transcription.clone();
-    let meeting_state = state.meeting.clone();
-    let transcription_app = app.clone();
-    log::info!("Starting native transcription session");
-    tauri::async_runtime::spawn_blocking(move || {
-        transcription.start_local(
-            &transcription_app,
-            input_device,
-            output_device,
-            crate::transcription::provider::TranscriptionConfig {
-                model,
-                language,
-                source: crate::transcription::provider::AudioSource::Microphone,
-            },
-            meeting_state,
-        )
-    })
-    .await
-    .map_err(error)?
-    .map_err(error)?;
-    log::info!("Native transcription session started");
+    state.intelligence.reset().map_err(error)?;
+    state.meeting.lock().map_err(error)?.transcript.clear();
+    if provider != "none" {
+        if output_device.as_deref() == Some("sck") {
+            tauri::async_runtime::spawn_blocking(
+                crate::permissions::ensure_screen_capture_permission,
+            )
+            .await
+            .map_err(error)??;
+        }
+        let transcription = state.transcription.clone();
+        let meeting_state = state.meeting.clone();
+        let transcription_app = app.clone();
+        log::info!("Starting native transcription session");
+        tauri::async_runtime::spawn_blocking(move || {
+            transcription.start_local(
+                &transcription_app,
+                input_device,
+                output_device,
+                crate::transcription::provider::TranscriptionConfig {
+                    model,
+                    language,
+                    source: crate::transcription::provider::AudioSource::Microphone,
+                },
+                meeting_state,
+            )
+        })
+        .await
+        .map_err(error)?
+        .map_err(error)?;
+        log::info!("Native transcription session started");
+    }
     {
         let mut meeting = state.meeting.lock().map_err(error)?;
         meeting.active = true;
-        meeting.transcript.clear();
     }
     app.emit("meeting-state-changed", json!({ "isActive": true }))
         .map_err(error)?;
@@ -115,8 +149,25 @@ pub async fn start_meeting(
 }
 
 #[tauri::command]
-pub fn abort_meeting(app: AppHandle, state: State<AppState>) -> Result<(), String> {
-    state.transcription.stop().map_err(error)?;
+pub async fn abort_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let _lifecycle = state.meeting_lifecycle.lock().await;
+    let transcription = state.transcription.clone();
+    let stopped = tauri::async_runtime::spawn_blocking(move || transcription.stop())
+        .await
+        .map_err(error)?;
+    state.intelligence.reset().map_err(error)?;
+    if let Err(error) = stopped {
+        log::warn!("Transcription abort: {error}");
+    }
+    state
+        .settings
+        .lock()
+        .map_err(error)?
+        .update(|s| {
+            s.mic_muted = Some(false);
+            s.system_muted = Some(false);
+        })
+        .map_err(error)?;
     let mut meeting = state.meeting.lock().map_err(error)?;
     meeting.active = false;
     meeting.transcript.clear();
@@ -125,8 +176,18 @@ pub fn abort_meeting(app: AppHandle, state: State<AppState>) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub fn end_meeting(app: AppHandle, state: State<AppState>) -> Result<Success, String> {
-    state.transcription.stop().map_err(error)?;
+pub async fn end_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<Success, String> {
+    let _lifecycle = state.meeting_lifecycle.lock().await;
+    if !state.meeting.lock().map_err(error)?.active {
+        return Ok(Success::new());
+    }
+    let transcription = state.transcription.clone();
+    let stopped = tauri::async_runtime::spawn_blocking(move || transcription.stop())
+        .await
+        .map_err(error)?;
+    if let Err(error) = stopped {
+        log::warn!("Transcription drain: {error}");
+    }
     let transcript = {
         let mut meeting = state.meeting.lock().map_err(error)?;
         meeting.active = false;
@@ -136,46 +197,65 @@ pub fn end_meeting(app: AppHandle, state: State<AppState>) -> Result<Success, St
             .map(|turn| format!("{}: {}", turn.speaker, turn.text))
             .collect::<Vec<_>>()
             .join("\n");
-        meeting.transcript.clear();
+        app.emit("dialogue-drained", &meeting.transcript)
+            .map_err(error)?;
         transcript
     };
     if !transcript.is_empty() {
+        let id = Uuid::new_v4().to_string();
         state
             .database
             .lock()
             .map_err(error)?
-            .create_meeting(&Uuid::new_v4().to_string(), &transcript)
+            .create_meeting(&id, &transcript)
             .map_err(error)?;
-        app.emit("meetings-updated", ()).map_err(error)?;
+        if let Err(error) = queue_summary(&app, &state, &id) {
+            log::warn!("Summary queue: {error}");
+        }
+        state.meeting.lock().map_err(error)?.transcript.clear();
     }
     app.emit("meeting-state-changed", json!({ "isActive": false }))
         .map_err(error)?;
+    state
+        .settings
+        .lock()
+        .map_err(error)?
+        .update(|settings| {
+            settings.mic_muted = Some(false);
+            settings.system_muted = Some(false);
+        })
+        .map_err(error)?;
+    app.emit("session-reset", ()).map_err(error)?;
     Ok(Success::new())
 }
 
 #[tauri::command]
 pub fn get_recent_meetings(state: State<AppState>) -> Result<Vec<Value>, String> {
-    Ok(state
+    let meetings = state
         .database
         .lock()
         .map_err(error)?
         .list_meetings()
-        .map_err(error)?
+        .map_err(error)?;
+    meetings
         .into_iter()
-        .map(map_meeting)
-        .collect())
+        .map(|meeting| {
+            let status = state.summaries.status(&meeting).map_err(error)?;
+            Ok(map_meeting(meeting, status))
+        })
+        .collect()
 }
 
 #[tauri::command]
 pub fn get_meeting_details(id: String, state: State<AppState>) -> Result<Value, String> {
-    Ok(map_meeting(
-        state
-            .database
-            .lock()
-            .map_err(error)?
-            .get_meeting(&id)
-            .map_err(error)?,
-    ))
+    let meeting = state
+        .database
+        .lock()
+        .map_err(error)?
+        .get_meeting(&id)
+        .map_err(error)?;
+    let status = state.summaries.status(&meeting).map_err(error)?;
+    Ok(map_meeting(meeting, status))
 }
 
 #[tauri::command]
@@ -226,14 +306,52 @@ pub fn delete_meeting(app: AppHandle, id: String, state: State<AppState>) -> Res
 }
 
 #[tauri::command]
-pub fn retry_meeting_summary(_id: String) -> Success {
-    Success::new()
+pub fn retry_meeting_summary(
+    app: AppHandle,
+    id: String,
+    state: State<AppState>,
+) -> Result<Success, String> {
+    queue_summary(&app, &state, &id)?;
+    Ok(Success::new())
+}
+
+fn queue_summary(app: &AppHandle, state: &AppState, id: &str) -> Result<(), String> {
+    let row = state
+        .database
+        .lock()
+        .map_err(error)?
+        .get_meeting(id)
+        .map_err(error)?;
+    let job = state.summaries.prepare(row).map_err(error)?;
+    app.emit("meetings-updated", ()).map_err(error)?;
+    let (database, llm, credentials, app) = (
+        state.database.clone(),
+        state.llm.clone(),
+        state.credentials.clone(),
+        app.clone(),
+    );
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = job.generate(llm, credentials, database).await {
+            log::warn!("Meeting summary generation failed: {error}");
+        }
+        if let Err(error) = app.emit("meetings-updated", ()) {
+            log::warn!("Summary notification failed: {error}");
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
-pub fn flush_database() -> Success {
-    Success::new()
+pub async fn flush_database(app: AppHandle) -> Result<Success, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>()
+            .database
+            .lock()
+            .map_err(error)?
+            .checkpoint()
+            .map_err(error)
+    })
+    .await
+    .map_err(error)??;
+    Ok(Success::new())
 }
-
-#[allow(dead_code)]
-fn _assert_send(_: &Database) {}

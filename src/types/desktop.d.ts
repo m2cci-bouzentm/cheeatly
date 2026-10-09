@@ -204,7 +204,7 @@ export interface DesktopAPI {
     }) => void
   ) => () => void;
 
-  getNativeAudioStatus: () => Promise<{ connected: boolean }>;
+  getNativeAudioStatus: () => Promise<{ connected: boolean; transcript?: Array<{ speaker: "Me" | "Them"; text: string }>; micMuted?: boolean; systemMuted?: boolean }>;
 
   // Intelligence Mode IPC
   getIntelligenceContext: () => Promise<{
