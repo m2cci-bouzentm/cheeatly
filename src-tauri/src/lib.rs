@@ -152,6 +152,10 @@ pub fn run() {
         .expect("error while building Tauri application")
         .run(|app, event| {
             use tauri::Manager;
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                let _ = windows::show_window(app.clone(), None);
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 let state = app.state::<state::AppState>();
                 if !state

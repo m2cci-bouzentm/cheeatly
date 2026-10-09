@@ -1,3 +1,4 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type Event } from '@tauri-apps/api/event';
 import { platform } from '@tauri-apps/plugin-os';
@@ -206,4 +207,11 @@ export const desktopAPI: DesktopAPI = {
 
 export function installDesktopBridge(): void {
   window.desktopAPI = desktopAPI;
+  document.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || !(event.target instanceof Element)) return;
+    if (!event.target.closest('.draggable-area, .drag-region')) return;
+    if (event.target.closest('button, input, textarea, select, a, [role="button"], [role="switch"], .no-drag')) return;
+    event.preventDefault();
+    void getCurrentWindow().startDragging().catch(console.error);
+  });
 }

@@ -428,7 +428,7 @@ export interface DesktopAPI {
     window?: number;
   }) => Promise<{ success: boolean }>;
   onQuestionAnalysisConfigChanged: (
-    callback: (config: { enabled: boolean; interval: number }) => void
+    callback: (config: { enabled: boolean; interval: number; window: number }) => void
   ) => () => void;
   getLogFilePath: () => Promise<string | null>;
   openLogFile: () => Promise<{ success: boolean; error?: string }>;

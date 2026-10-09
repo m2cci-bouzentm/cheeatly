@@ -4,7 +4,7 @@ import { useShortcuts } from '../../hooks/useShortcuts';
 import { getModifierSymbol } from '../../utils/platformUtils';
 import { Switch } from '@/components/ui/switch';
 
-const SettingsPopup = () => {
+const SettingsPopup = ({ embedded = false }: { embedded?: boolean }) => {
   const { shortcuts } = useShortcuts();
   const isLightTheme = false;
   const [isUndetectable, setIsUndetectable] = useState(false);
@@ -46,7 +46,7 @@ const SettingsPopup = () => {
 
   // Auto-resize Window
   useLayoutEffect(() => {
-    if (!contentRef.current) return;
+    if (embedded || !contentRef.current) return;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -64,7 +64,7 @@ const SettingsPopup = () => {
 
     observer.observe(contentRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [embedded]);
 
   const isDarkBg = !isLightTheme;
 

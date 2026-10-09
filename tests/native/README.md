@@ -5,7 +5,22 @@ App under test: `/Applications/Cheatly.app`, release Tauri build on Apple Silico
 
 Tests used real accessibility clicks through `@oai/sky`; no browser mocks.
 
-## Observed
+## Overlay follow-up (latest installed build)
+
+- All Cheatly test windows were routed to AeroSpace workspace **5**. The user's focused workspace stayed **1**.
+- Model and quick-settings menus now render inside the overlay's existing window. Real accessibility clicks opened both menus, selected GLM 4.7, restored GPT-OSS 120B, and dismissed quick settings by clicking Transcript. AeroSpace reported just one Cheatly window throughout.
+- Stop & Save returned to the launcher on the latest build. Discard returned to the launcher on the preceding build with the same lifecycle fix. These checks used STT Disabled; the two existing saved sessions stayed unchanged. They do **not** verify saving a fresh recording.
+- Restored Local Parakeet, SCK, GPT-OSS 120B and Undetectable mode after testing.
+- Retrying real recording on the latest installed build reached ScreenCaptureKit and failed with **-3801 (TCC denied)**. Both speech sidecars cleaned up. OS consent remains a blocker; the computer-use service blocks the protected macOS consent UI.
+- Question scans now include live partial speech, expose errors, permit retries after failure, and reject stale results after reset. Logs identify a missing OpenRouter key. Successful live detection remains unverified until recording consent and credentials are available.
+- Native dragging now calls Tauri's startDragging API and excludes interactive controls. A real mouse-drag check remains pending: AeroSpace parks workspace 5 offscreen while the user works in workspace 1. Asked before switching their workspace.
+- Before the workspace restriction, actual ScreenCaptureKit app screenshots showed General settings visible with protection off and blank with it on (`tmp/detectable-sck.png`, `tmp/undetectable-sck.png`). Latest-build offscreen screenshots are blank even when detectable, so they are **not** evidence of protection or visual menu layout. Rechecking the final build on a visible workspace remains pending.
+- Latest checks: frontend build, 35 frontend checks (including four source regression checks), 38 Rust tests, release app build, and installed-bundle signature/entitlement verification passed.
+
+Latest evidence: `tmp/native-acceptance.json`, `tmp/overlay-unit-tests.log`,
+`tmp/overlay-final-rust-tests.log`, `tmp/overlay-final-build.log`.
+
+## Earlier observed results
 
 - Launcher starts; bundled skills load.
 - Start launches the real Swift/Core ML sidecars; mic and system transcript events reach the overlay.

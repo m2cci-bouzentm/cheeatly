@@ -36,13 +36,21 @@ pub async fn analyze_transcript(
             json!({"role":"user","content":transcript}),
         ],
     )
-    .await?;
+    .await.map_err(|error| {
+        log::warn!("Question detection failed: {error}");
+        error
+    })?;
     let cleaned = response
         .trim()
         .trim_start_matches("```json")
         .trim_end_matches("```")
         .trim();
-    serde_json::from_str(cleaned).map_err(error)
+    let questions: Questions = serde_json::from_str(cleaned).map_err(|error| {
+        log::warn!("Question detection returned invalid JSON: {error}");
+        format!("Question detection returned invalid JSON: {error}")
+    })?;
+    log::info!("Question detection completed: {} suggestions", questions.questions.len());
+    Ok(questions)
 }
 
 #[tauri::command]

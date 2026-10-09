@@ -75,7 +75,7 @@ export const AudioTab: React.FC = () => {
                     id: 'none',
                     label: 'Disabled',
                     badge: null,
-                    desc: 'Audio is captured but not transcribed',
+                    desc: 'Recording and transcription are off',
                     color: 'gray',
                     icon: <Mic size={14} />,
                   },

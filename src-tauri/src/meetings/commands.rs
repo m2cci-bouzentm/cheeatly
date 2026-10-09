@@ -184,8 +184,7 @@ pub async fn end_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<S
         log::warn!("Transcription drain: {error}");
     }
     let transcript = {
-        let mut meeting = state.meeting.lock().map_err(error)?;
-        meeting.active = false;
+        let meeting = state.meeting.lock().map_err(error)?;
         let transcript = meeting
             .transcript
             .iter()
@@ -209,6 +208,7 @@ pub async fn end_meeting(app: AppHandle, state: State<'_, AppState>) -> Result<S
         }
         state.meeting.lock().map_err(error)?.transcript.clear();
     }
+    state.meeting.lock().map_err(error)?.active = false;
     app.emit("meeting-state-changed", json!({ "isActive": false }))
         .map_err(error)?;
     state

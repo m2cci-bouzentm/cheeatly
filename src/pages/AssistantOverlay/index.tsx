@@ -38,6 +38,8 @@ import {
 } from '../../lib/overlayAppearance.ts';
 import { isMac } from '../../utils/platformUtils.ts';
 import { cn } from '../../lib/utils.ts';
+import ModelSelectorWindow from '../ModelSelector';
+import SettingsPopup from '../SettingsPopup';
 import TopPill from '../../components/ui/TopPill.tsx';
 import { Card } from '../../components/ui/card.tsx';
 import { Button } from '../../components/ui/button.tsx';
@@ -103,7 +105,11 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [answerPanelPinned, setSuggestionPanelPinned] = useState(false);
   const answerPanelPinnedRef = useRef(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [popup, setPopup] = useState<'model' | 'settings' | null>(null);
+  const isSettingsOpen = popup === 'settings';
+  const [endingMeeting, setEndingMeeting] = useState(false);
+  const [meetingEndError, setMeetingEndError] = useState('');
+  const endingMeetingRef = useRef(false);
   const [conversationContext, setConversationContext] = useState('');
   const [attachedContext, setAttachedContext] = useState<AttachmentContext[]>(
     []
@@ -259,6 +265,35 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     sendWithSystem,
   });
 
+  const finishMeeting = async (save: boolean) => {
+    if (endingMeetingRef.current) return;
+    endingMeetingRef.current = true;
+    setEndingMeeting(true);
+    setMeetingEndError('');
+    try {
+      if (save) await window.desktopAPI.endMeeting();
+      else await window.desktopAPI.abortMeeting();
+      await window.desktopAPI.modelSelectorCloseIfOpen();
+      await window.desktopAPI.closeSettingsWindow();
+      await window.desktopAPI.setWindowMode('launcher');
+    } catch (error) {
+      setMeetingEndError(String(error));
+    } finally {
+      endingMeetingRef.current = false;
+      setEndingMeeting(false);
+    }
+  };
+  const scanTurns = useMemo(
+    () => [
+      ...meeting.dialogueTurns,
+      ...(['Me', 'Them'] as const).flatMap((speaker) => {
+        const text = meeting.livePartials[speaker]?.trim();
+        return text ? [{ speaker, text }] : [];
+      }),
+    ],
+    [meeting.dialogueTurns, meeting.livePartials]
+  );
+
   const {
     questions,
     dismiss: dismissQuestion,
@@ -266,8 +301,10 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     reset: resetQuestions,
     forceRefresh,
     isScanning,
+    scanError,
+    scanNotice,
     settingsEnabled: questionAnalysisEnabled,
-  } = useDetectedQuestions(meeting.dialogueTurns, !analysisPaused);
+  } = useDetectedQuestions(scanTurns, !analysisPaused);
   resetQuestionsRef.current = resetQuestions;
   const questionDetectionPaused = analysisPaused || !questionAnalysisEnabled;
 
@@ -359,11 +396,27 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
   }, [messages]);
 
   useEffect(() => {
-    const unsubscribe = window.desktopAPI.onSettingsVisibilityChange(
-      (isVisible) => setIsSettingsOpen(isVisible)
-    );
-    return () => unsubscribe?.();
-  }, []);
+    if (!popup) return;
+    const dismiss = (event: MouseEvent) => {
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.closest('[data-overlay-popup]')
+      )
+        setPopup(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPopup(null);
+    };
+    const blur = () => setPopup(null);
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('blur', blur);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('blur', blur);
+    };
+  }, [popup]);
 
   useEffect(() => {
     if (!isExpandedEffectInitializedRef.current) {
@@ -377,7 +430,8 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
       isStealthRef.current = false;
       return;
     }
-    setTimeout(() => window.desktopAPI.hideWindow(), 400);
+    const timer = setTimeout(() => window.desktopAPI.hideWindow(), 400);
+    return () => clearTimeout(timer);
   }, [isExpanded]);
 
   useEffect(() => {
@@ -588,7 +642,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
       );
       return;
     }
-    window.desktopAPI.toggleSettingsWindow();
+    window.desktopAPI.openSettingsTab('audio');
   };
 
   const channelDotClass = (
@@ -641,6 +695,11 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
         className="flex flex-col items-start w-fit h-fit min-h-0 bg-transparent p-0 rounded-xl font-sans gap-1.5 overlay-text-primary"
         style={{ pointerEvents: 'auto' }}
       >
+        {meetingEndError && (
+          <div role="alert" className="w-full px-3 py-2 text-sm text-red-400">
+            {meetingEndError}
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {isExpanded && (
             <motion.div
@@ -661,8 +720,9 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                   onBackToApp={() =>
                     window.desktopAPI.setWindowMode('launcher')
                   }
-                  onAbort={() => window.desktopAPI.abortMeeting()}
-                  onEnd={() => window.desktopAPI.endMeeting()}
+                  onAbort={() => void finishMeeting(false)}
+                  onEnd={() => void finishMeeting(true)}
+                  busy={endingMeeting}
                   appearance={appearance}
                   onLogoClick={() =>
                     window.desktopAPI.setWindowMode('launcher')
@@ -840,21 +900,11 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                           variant="ghost"
                           size="sm"
                           data-model-selector-toggle="true"
-                          onClick={(e) => {
-                            if (!contentRef.current) return;
-                            const contentRect =
-                              contentRef.current.getBoundingClientRect();
-                            const buttonRect =
-                              e.currentTarget.getBoundingClientRect();
-                            const GAP = 8;
-                            const x = window.screenX + buttonRect.left;
-                            const y = window.screenY + contentRect.bottom + GAP;
-                            window.desktopAPI.toggleModelSelector({
-                              x,
-                              y,
-                              activate: false,
-                            });
-                          }}
+                          data-overlay-popup
+                          aria-expanded={popup === 'model'}
+                          onClick={() =>
+                            setPopup(popup === 'model' ? null : 'model')
+                          }
                           className="h-7 px-2 rounded-md hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5 no-drag"
                         >
                           <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -867,24 +917,12 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={(e) => {
-                            if (isSettingsOpen) {
-                              window.desktopAPI.toggleSettingsWindow();
-                              return;
-                            }
-                            if (!contentRef.current) return;
-                            const contentRect =
-                              contentRef.current.getBoundingClientRect();
-                            const buttonRect =
-                              e.currentTarget.getBoundingClientRect();
-                            const GAP = 8;
-                            const x = window.screenX + buttonRect.left;
-                            const y = window.screenY + contentRect.bottom + GAP;
-                            window.desktopAPI.toggleSettingsWindow({
-                              x,
-                              y,
-                            });
-                          }}
+                          data-overlay-popup
+                          aria-label="Quick settings"
+                          aria-expanded={isSettingsOpen}
+                          onClick={() =>
+                            setPopup(isSettingsOpen ? null : 'settings')
+                          }
                           className={cn(
                             'h-7 w-7 rounded-md transition-all duration-300 no-drag',
                             isSettingsOpen
@@ -1088,7 +1126,8 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                                 size="icon"
                                 onClick={() => {
                                   if (isScanning) return;
-                                  forceRefresh();
+                                  setQuestionsPanelOpen(true);
+                                  void forceRefresh();
                                 }}
                                 disabled={isScanning}
                                 className={cn(
@@ -1139,6 +1178,17 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                           </div>
                         </div>
                       )}
+                      {(scanError || scanNotice) && (
+                        <p
+                          role={scanError ? 'alert' : 'status'}
+                          className={cn(
+                            'px-3 py-2 text-xs no-drag',
+                            scanError ? 'text-amber-400' : 'text-zinc-400'
+                          )}
+                        >
+                          {scanError || scanNotice}
+                        </p>
+                      )}
                     </div>
                   </Card>
                 </motion.div>
@@ -1152,6 +1202,19 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
                   />
                 )}
               </div>
+              {popup && (
+                <div
+                  data-overlay-popup
+                  className="no-drag"
+                  style={{ marginLeft: popup === 'model' ? 12 : 140 }}
+                >
+                  {popup === 'model' ? (
+                    <ModelSelectorWindow onClose={() => setPopup(null)} />
+                  ) : (
+                    <SettingsPopup embedded />
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

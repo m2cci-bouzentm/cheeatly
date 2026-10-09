@@ -76,6 +76,7 @@ pub fn set_window_mode(app: AppHandle, mode: String, inactive: Option<bool>) -> 
     let window = main_window(&app)?;
     match mode.as_str() {
         "launcher" => {
+            window.set_decorations(true).map_err(error)?;
             window
                 .set_size(tauri::LogicalSize::new(900.0, 680.0))
                 .map_err(error)?;
@@ -85,6 +86,7 @@ pub fn set_window_mode(app: AppHandle, mode: String, inactive: Option<bool>) -> 
                 .map_err(error)?;
         }
         "overlay" => {
+            window.set_decorations(false).map_err(error)?;
             window
                 .set_size(tauri::LogicalSize::new(520.0, 240.0))
                 .map_err(error)?;

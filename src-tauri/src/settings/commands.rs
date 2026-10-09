@@ -179,7 +179,7 @@ pub async fn set_question_analysis_config(
     let current = get_question_analysis_config(state).await?;
     app.emit(
         "question-analysis-config-changed",
-        json!({ "enabled": current.enabled, "interval": current.interval }),
+        json!({ "enabled": current.enabled, "interval": current.interval, "window": current.window }),
     )
     .map_err(error)?;
     Ok(Success::new())

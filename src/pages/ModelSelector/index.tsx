@@ -8,7 +8,7 @@ interface ModelOption {
   name: string;
 }
 
-const ModelSelectorWindow = () => {
+const ModelSelectorWindow = ({ onClose }: { onClose?: () => void }) => {
   const isLight = false;
   const [currentModel, setCurrentModel] = useState<string>(
     () => localStorage.getItem('cached-current-model') || ''
@@ -36,23 +36,30 @@ const ModelSelectorWindow = () => {
     loadConfig();
     window.addEventListener('focus', loadConfig);
 
-    const unsubscribe = window.desktopAPI.onModelChanged(
-      (modelId: string) => {
-        setCurrentModel(modelId);
-      }
-    );
+    const unsubscribe = window.desktopAPI.onModelChanged((modelId: string) => {
+      setCurrentModel(modelId);
+    });
     return () => {
       unsubscribe?.();
       window.removeEventListener('focus', loadConfig);
     };
   }, []);
 
-  const handleSelectFn = (modelId: string) => {
-    setCurrentModel(modelId);
-    localStorage.setItem('cached-current-model', modelId);
-    window.desktopAPI
-      .setModel(modelId)
-      .catch((err: any) => console.error('Failed to set model:', err));
+  const [error, setError] = useState('');
+  const handleSelectFn = async (modelId: string) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await window.desktopAPI.setModel(modelId);
+      setCurrentModel(modelId);
+      localStorage.setItem('cached-current-model', modelId);
+      if (onClose) onClose();
+      else await window.desktopAPI.modelSelectorCloseIfOpen();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const panelClass = isLight
@@ -62,9 +69,14 @@ const ModelSelectorWindow = () => {
   return (
     <div className="w-fit h-fit bg-transparent flex flex-col">
       <div
-        className={`w-[140px] h-[200px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left overlay-shell-surface ${panelClass}`}
+        className={`w-[240px] h-[240px] backdrop-blur-md border rounded-[16px] overflow-hidden shadow-2xl p-2 flex flex-col animate-scale-in origin-top-left overlay-shell-surface ${panelClass}`}
       >
         <div className="relative z-[1] flex-1 min-h-0 flex flex-col">
+          {error && (
+            <p role="alert" className="text-xs text-red-400">
+              {error}
+            </p>
+          )}
           {isLoading ? (
             <div className="flex items-center justify-center py-4 overlay-text-muted text-slate-500">
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

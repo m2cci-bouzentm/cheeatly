@@ -10,6 +10,7 @@ interface TopPillProps {
   onBackToApp: () => void;
   onAbort?: () => void;
   onEnd?: () => void;
+  busy?: boolean;
   appearance: OverlayAppearance;
   onLogoClick?: () => void;
 }
@@ -20,6 +21,7 @@ export default function TopPill({
   onBackToApp,
   onAbort,
   onEnd,
+  busy = false,
   appearance,
   onLogoClick,
 }: TopPillProps) {
@@ -78,6 +80,7 @@ export default function TopPill({
             variant="ghost"
             size="sm"
             onClick={onAbort}
+            disabled={busy}
             className={cn(
               'h-8 px-4 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 flex items-center gap-2',
               isLightTheme
@@ -97,6 +100,7 @@ export default function TopPill({
             variant="ghost"
             size="sm"
             onClick={onEnd}
+            disabled={busy}
             className={cn(
               'h-8 px-4 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 flex items-center gap-2',
               isLightTheme
@@ -106,7 +110,9 @@ export default function TopPill({
             title="Stop & save meeting"
           >
             <Square className="w-3.5 h-3.5 opacity-60" />
-            <span className="tracking-tight">Stop & Save</span>
+            <span className="tracking-tight">
+              {busy ? 'Stopping…' : 'Stop & Save'}
+            </span>
           </Button>
         )}
 
