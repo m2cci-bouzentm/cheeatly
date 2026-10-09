@@ -124,6 +124,57 @@ fn clean_title(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn blank_transcripts_do_not_claim_a_pending_job_and_saved_summary_wins() {
+        let (_directory, database) = database();
+        let service = SummaryService::default();
+        let mut row = database.get_meeting("one").unwrap();
+        row.transcript = Some(" ".into());
+        assert!(service.prepare(row).is_err());
+        let job = service
+            .prepare(database.get_meeting("one").unwrap())
+            .unwrap();
+        database
+            .update_meeting_summary("one", "Manually written summary")
+            .unwrap();
+        assert_eq!(
+            service
+                .status(&database.get_meeting("one").unwrap())
+                .unwrap(),
+            SummaryStatus::Done
+        );
+        drop(job);
+    }
+
+    #[test]
+    fn dropping_one_job_does_not_release_another_meetings_job() {
+        let (_directory, database) = database();
+        database
+            .create_meeting("two", "Them: Another question")
+            .unwrap();
+        let service = SummaryService::default();
+        let first = service
+            .prepare(database.get_meeting("one").unwrap())
+            .unwrap();
+        let second = service
+            .prepare(database.get_meeting("two").unwrap())
+            .unwrap();
+        drop(first);
+        assert_eq!(
+            service
+                .status(&database.get_meeting("one").unwrap())
+                .unwrap(),
+            SummaryStatus::Failed
+        );
+        assert_eq!(
+            service
+                .status(&database.get_meeting("two").unwrap())
+                .unwrap(),
+            SummaryStatus::Pending
+        );
+        drop(second);
+    }
+
     fn database() -> (tempfile::TempDir, Database) {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("test.db")).unwrap();

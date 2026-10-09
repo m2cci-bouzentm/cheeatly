@@ -111,6 +111,59 @@ impl Intelligence {
 mod tests {
     use super::*;
     #[test]
+    fn latest_started_request_owns_context_and_answer() {
+        let state = Intelligence::default();
+        let (generation, _) = state.begin("older", "older context".into()).unwrap();
+        state.begin("newer", "newer context".into()).unwrap();
+        state
+            .finish("newer", generation, Some("new answer".into()))
+            .unwrap();
+        state
+            .finish("older", generation, Some("late old answer".into()))
+            .unwrap();
+        let snapshot = state.snapshot().unwrap();
+        assert_eq!(snapshot.context, "newer context");
+        assert_eq!(
+            snapshot.last_assistant_message.as_deref(),
+            Some("new answer")
+        );
+    }
+
+    #[test]
+    fn cancellation_is_scoped_and_unknown_ids_are_harmless() {
+        let state = Intelligence::default();
+        let (_, first) = state.begin("first", "first".into()).unwrap();
+        let (_, second) = state.begin("second", "second".into()).unwrap();
+        state.abort("missing").unwrap();
+        state.abort("first").unwrap();
+        assert!(first.is_cancelled());
+        assert!(!second.is_cancelled());
+        state.reset().unwrap();
+        assert!(second.is_cancelled());
+    }
+
+    #[test]
+    fn late_completion_cannot_remove_a_reused_id_after_reset() {
+        let state = Intelligence::default();
+        let (old_generation, old_token) = state.begin("same", "old".into()).unwrap();
+        state.reset().unwrap();
+        let (new_generation, new_token) = state.begin("same", "new".into()).unwrap();
+        state
+            .finish("same", old_generation, Some("stale".into()))
+            .unwrap();
+        assert!(old_token.is_cancelled());
+        assert!(!new_token.is_cancelled());
+        assert!(state.snapshot().unwrap().last_assistant_message.is_none());
+        state
+            .finish("same", new_generation, Some("fresh".into()))
+            .unwrap();
+        assert_eq!(
+            state.snapshot().unwrap().last_assistant_message.as_deref(),
+            Some("fresh")
+        );
+    }
+
+    #[test]
     fn context_roundtrip_and_reset_cancel_inflight_work() {
         let state = Intelligence::default();
         let (generation, token) = state

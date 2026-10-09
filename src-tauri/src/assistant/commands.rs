@@ -267,6 +267,32 @@ fn normalize_message(message: Value) -> Option<Value> {
 mod tests {
     use super::*;
     #[test]
+    fn message_conversion_preserves_text_and_rejects_unsupported_inputs() {
+        for role in ["user", "assistant", "system"] {
+            let input = json!({"role":role,"content":"Bonjour 世界"});
+            assert_eq!(normalize_message(input.clone()), Some(input));
+        }
+        for input in [
+            json!({"role":"tool","content":"tool output"}),
+            json!({"content":"missing role"}),
+            json!({"role":"user","content":17}),
+            json!({"role":"assistant","parts":[{"type":"file","url":"data:image/png;base64,YQ=="}]}),
+            json!({"role":"user","parts":[{"type":"file","url":"https://example.com/image.png"}]}),
+            json!({"role":"user","parts":[{"type":"text"}]}),
+        ] {
+            assert!(normalize_message(input.clone()).is_none(), "{input}");
+        }
+        assert_eq!(
+            normalize_message(json!({"role":"user","parts":[
+                {"type":"text","text":"Keep this"},
+                {"type":"tool-result","text":"ignore"},
+                {"type":"file","url":"file:///private"}
+            ]})),
+            Some(json!({"role":"user","content":[{"type":"text","text":"Keep this"}]}))
+        );
+    }
+
+    #[test]
     fn screenshots_survive_message_conversion() {
         let message = normalize_message(json!({"role":"user","parts":[{"type":"text","text":"Describe this"},{"type":"file","url":"data:image/png;base64,YQ=="}]})).unwrap();
         assert_eq!(message["content"][1]["type"], "image_url");

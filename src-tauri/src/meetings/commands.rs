@@ -350,3 +350,40 @@ pub async fn flush_database(app: AppHandle) -> Result<Success, String> {
     .map_err(error)??;
     Ok(Success::new())
 }
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn saved_meetings_keep_the_frontend_response_shape_and_speaker_mapping() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = crate::database::Database::open(&directory.path().join("contract.db")).unwrap();
+        db.create_meeting(
+            "one",
+            "Me: Budget: €50\nThem: Tomorrow?\nGuest: Yes\nUnlabeled line",
+        )
+        .unwrap();
+        let mapped = map_meeting(
+            db.get_meeting("one").unwrap(),
+            crate::meetings::summary::SummaryStatus::Failed,
+        );
+        assert_eq!(mapped["id"], "one");
+        assert_eq!(mapped["title"], "Untitled Session");
+        assert_eq!(mapped["summaryStatus"], "failed");
+        assert_eq!(mapped["summary"], "");
+        assert_eq!(
+            mapped["detailedSummary"],
+            json!({"overview":"","actionItems":[],"keyPoints":[]})
+        );
+        assert_eq!(
+            mapped["transcript"],
+            json!([
+                {"speaker":"user","text":"Budget: €50","timestamp":0},
+                {"speaker":"interviewer","text":"Tomorrow?","timestamp":1},
+                {"speaker":"Guest","text":"Yes","timestamp":2},
+                {"speaker":"Unknown","text":"Unlabeled line","timestamp":3}
+            ])
+        );
+    }
+}

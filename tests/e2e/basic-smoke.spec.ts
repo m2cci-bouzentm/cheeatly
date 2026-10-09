@@ -57,29 +57,19 @@ test.describe('Cheatly Tauri renderer smoke', () => {
 
   test('settings panel opens and closes', async ({ page }) => {
     await page.goto(APP_URL);
-    await page.waitForLoadState('networkidle');
-
-    const dismissPermissions = page.getByRole('button', { name: 'Dismiss' });
-    if (await dismissPermissions.isVisible().catch(() => false)) {
-      await dismissPermissions.click();
-    }
-
-    const settingsBtn = page
-      .locator('button[aria-label*="settings" i], button:has-text("Settings")')
-      .first();
-    const settingsVisible = await settingsBtn.isVisible().catch(() => false);
-
-    if (!settingsVisible) {
-      test.skip(true, 'Settings button not found in this UI layout');
-      return;
-    }
-    await settingsBtn.click();
-    await page.waitForTimeout(500);
-
-    // Close again
-    const closeBtn = page
-      .locator('button[aria-label*="close" i], button:has-text("Close")')
-      .first();
-    if (await closeBtn.isVisible()) await closeBtn.click();
+    const dismiss = page.getByRole('button', { name: 'Dismiss', exact: true });
+    await dismiss.click();
+    await expect(dismiss).toBeHidden();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'General', exact: true })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'General', exact: true })
+    ).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: 'Logo Start Cheatly' })
+    ).toBeVisible();
   });
 });

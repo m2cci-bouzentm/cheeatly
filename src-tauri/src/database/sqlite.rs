@@ -337,6 +337,88 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::Database;
+    #[test]
+    fn meeting_edits_survive_reopen_and_delete_is_isolated() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("meetings.db");
+        let db = Database::open(&path).unwrap();
+        let transcript = "Me: Bonjour: budget €50\nThem: 明日ですか？";
+        db.create_meeting("one", transcript).unwrap();
+        db.create_meeting("two", "Them: Keep me").unwrap();
+        db.update_meeting_title("one", "User title").unwrap();
+        db.update_meeting_summary("one", "User summary").unwrap();
+        drop(db);
+        let db = Database::open(&path).unwrap();
+        let row = db.get_meeting("one").unwrap();
+        assert_eq!(row.transcript.as_deref(), Some(transcript));
+        assert_eq!(row.title.as_deref(), Some("User title"));
+        assert_eq!(row.summary.as_deref(), Some("User summary"));
+        assert!(db.create_meeting("one", "overwrite attempt").is_err());
+        assert_eq!(
+            db.get_meeting("one").unwrap().transcript.as_deref(),
+            Some(transcript)
+        );
+        db.delete_meeting("one").unwrap();
+        db.delete_meeting("one").unwrap();
+        assert!(db.get_meeting("one").is_err());
+        assert_eq!(db.list_meetings().unwrap().len(), 1);
+        assert_eq!(
+            db.get_meeting("two").unwrap().transcript.as_deref(),
+            Some("Them: Keep me")
+        );
+    }
+
+    #[test]
+    fn reseeding_preserves_skill_edits_and_bundled_skills_cannot_be_deleted() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::open(&directory.path().join("skills.db")).unwrap();
+        db.seed_skill("bundled", "Original", "Original content")
+            .unwrap();
+        db.update_skill(
+            "bundled",
+            Some("Edited"),
+            Some("Edited content"),
+            Some(false),
+        )
+        .unwrap();
+        db.seed_skill("bundled", "New default", "New default content")
+            .unwrap();
+        let skills = db.list_skills().unwrap();
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].description, "Edited");
+        assert!(!skills[0].enabled);
+        assert!(skills[0].bundled);
+        assert_eq!(
+            db.get_skill_content("bundled").unwrap().as_deref(),
+            Some("Edited content")
+        );
+        assert!(db.remove_skill("bundled").is_err());
+        db.create_skill("custom", "Imported", "Custom content")
+            .unwrap();
+        db.remove_skill("custom").unwrap();
+        assert!(db.get_skill_content("custom").unwrap().is_none());
+        assert_eq!(db.list_skills().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn context_updates_replace_description_and_file_deletion_returns_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::open(&directory.path().join("context.db")).unwrap();
+        assert_eq!(db.context_description().unwrap(), "");
+        db.save_context_description("First").unwrap();
+        db.save_context_description("Updated 世界").unwrap();
+        let first = db.create_context_file("one.txt", "/test/one.txt").unwrap();
+        let second = db.create_context_file("two.txt", "/test/two.txt").unwrap();
+        assert_eq!(db.context_description().unwrap(), "Updated 世界");
+        assert_eq!(
+            db.delete_context_file(&first.id).unwrap().as_deref(),
+            Some("/test/one.txt")
+        );
+        assert!(db.delete_context_file(&first.id).unwrap().is_none());
+        let remaining = db.list_context_files().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, second.id);
+    }
 
     #[test]
     fn migrates_and_persists_meetings() {

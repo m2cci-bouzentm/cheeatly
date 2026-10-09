@@ -51,3 +51,53 @@ impl SettingsStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_updates_preserve_other_settings_after_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("nested/settings.json");
+        let mut store = SettingsStore::load(path.clone()).unwrap();
+        assert!(store.values().is_undetectable.is_none());
+        store
+            .update(|s| {
+                s.is_undetectable = Some(true);
+                s.parakeet_language = Some("fr".into());
+                s.question_analysis_window = Some(40);
+            })
+            .unwrap();
+        store.update(|s| s.mic_muted = Some(true)).unwrap();
+        let reopened = SettingsStore::load(path.clone()).unwrap();
+        assert_eq!(reopened.values().is_undetectable, Some(true));
+        assert_eq!(reopened.values().parakeet_language.as_deref(), Some("fr"));
+        assert_eq!(reopened.values().question_analysis_window, Some(40));
+        assert_eq!(reopened.values().mic_muted, Some(true));
+        let json: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(json["isUndetectable"], true);
+        assert_eq!(json["questionAnalysisWindow"], 40);
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn failed_write_does_not_change_in_memory_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().join("blocked");
+        let mut store = SettingsStore::load(parent.join("settings.json")).unwrap();
+        fs::write(&parent, "not a directory").unwrap();
+        assert!(store.update(|s| s.is_undetectable = Some(true)).is_err());
+        assert!(store.values().is_undetectable.is_none());
+        assert_eq!(fs::read_to_string(parent).unwrap(), "not a directory");
+    }
+
+    #[test]
+    fn malformed_existing_settings_are_reported_without_overwriting() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        fs::write(&path, "{broken").unwrap();
+        assert!(SettingsStore::load(path.clone()).is_err());
+        assert_eq!(fs::read_to_string(path).unwrap(), "{broken");
+    }
+}
