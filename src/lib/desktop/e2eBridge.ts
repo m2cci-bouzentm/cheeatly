@@ -31,7 +31,7 @@ export const e2eDesktopAPI = new Proxy(
       sttProvider: 'none',
     }),
     getCurrentLlmConfig: async () => ({ provider: 'none', model: '' }),
-    getDefaultModel: async () => ({ model: 'openai/gpt-oss-120b' }),
+    getDefaultModel: async () => ({ model: 'qwen/qwen3.7-flash' }),
     getRecognitionLanguages: async () => ({ auto: 'Auto', english: 'English' }),
     getInputDevices: async () => [],
     getOutputDevices: async () => [],

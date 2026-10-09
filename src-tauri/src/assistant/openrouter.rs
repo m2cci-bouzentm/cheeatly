@@ -45,7 +45,7 @@ impl OpenRouter {
         let model = credentials
             .default_model
             .as_deref()
-            .unwrap_or("openai/gpt-oss-120b");
+            .unwrap_or("qwen/qwen3.7-flash");
         let mut text = String::new();
         for step in 0..3 {
             let mut body = json!({"model":model,"messages":messages,"stream":true});
@@ -120,7 +120,7 @@ impl OpenRouter {
         let model = credentials
             .default_model
             .as_deref()
-            .unwrap_or("openai/gpt-oss-120b");
+            .unwrap_or("qwen/qwen3.7-flash");
         let response = self
             .client
             .post("https://openrouter.ai/api/v1/chat/completions")

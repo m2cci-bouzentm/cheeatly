@@ -9,6 +9,7 @@ const ACCOUNT: &str = "credentials";
 pub struct StoredCredentials {
     pub open_router_api_key: Option<String>,
     pub question_analysis_api_key: Option<String>,
+    #[serde(default, deserialize_with = "super::deserialize_model")]
     pub default_model: Option<String>,
     pub stt_provider: Option<String>,
     pub stt_language: Option<String>,

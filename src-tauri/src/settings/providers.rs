@@ -26,7 +26,7 @@ pub async fn get_current_llm_config(
     let values = credentials(&state).await?;
     Ok(json!({
         "provider": if values.open_router_api_key.is_some() { "openrouter" } else { "none" },
-        "model": values.default_model.unwrap_or_else(|| "openai/gpt-oss-120b".into())
+        "model": values.default_model.unwrap_or_else(|| "qwen/qwen3.7-flash".into())
     }))
 }
 
@@ -66,7 +66,7 @@ pub async fn get_stored_credentials(
 #[tauri::command]
 pub async fn get_default_model(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     Ok(
-        json!({ "model": credentials(&state).await?.default_model.unwrap_or_else(|| "openai/gpt-oss-120b".into()) }),
+        json!({ "model": credentials(&state).await?.default_model.unwrap_or_else(|| "qwen/qwen3.7-flash".into()) }),
     )
 }
 

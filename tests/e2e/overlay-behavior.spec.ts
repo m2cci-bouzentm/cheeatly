@@ -120,7 +120,7 @@ async function openOverlay(page: Page, interval = 3600) {
     page.getByRole('button', { name: 'Pause mic', exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'GPT-OSS 120B', exact: true })
+    page.getByRole('button', { name: 'Qwen 3.7 Flash', exact: true })
   ).toBeVisible();
   await page.evaluate(() => {
     (window as any).behavior.calls = [];
@@ -136,7 +136,7 @@ test('selectors stay embedded, select a model, and dismiss on Escape/outside cli
   context,
 }) => {
   await openOverlay(page);
-  const model = page.getByRole('button', { name: 'GPT-OSS 120B', exact: true });
+  const model = page.getByRole('button', { name: 'Qwen 3.7 Flash', exact: true });
   await model.click();
   await page.getByRole('button', { name: 'GLM 4.7', exact: true }).click();
   await expect(

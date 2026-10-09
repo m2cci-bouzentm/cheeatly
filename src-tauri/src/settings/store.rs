@@ -13,6 +13,7 @@ pub struct AppSettings {
     pub parakeet_language: Option<String>,
     pub question_analysis_enabled: Option<bool>,
     pub question_analysis_interval: Option<u32>,
+    #[serde(default, deserialize_with = "super::deserialize_model")]
     pub question_analysis_model: Option<String>,
     pub question_analysis_window: Option<u32>,
     pub mic_muted: Option<bool>,

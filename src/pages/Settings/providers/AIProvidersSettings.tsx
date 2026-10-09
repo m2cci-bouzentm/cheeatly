@@ -12,7 +12,7 @@ export const AIProvidersSettings: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testError, setTestError] = useState('');
-  const [defaultModel, setDefaultModel] = useState('openai/gpt-oss-120b');
+  const [defaultModel, setDefaultModel] = useState('qwen/qwen3.7-flash');
   const [customModelId, setCustomModelId] = useState('');
   const [showCustom, setShowCustom] = useState(false);
 

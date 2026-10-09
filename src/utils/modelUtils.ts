@@ -1,5 +1,5 @@
 export const OPENROUTER_MODELS = [
-  { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B', desc: 'Fastest • Cerebras', vision: false },
+  { id: 'qwen/qwen3.7-flash', name: 'Qwen 3.7 Flash', desc: 'Low cost • Vision', vision: true },
   { id: 'z-ai/glm-4.7', name: 'GLM 4.7', desc: 'Smart • Cerebras', vision: false },
   { id: 'z-ai/glm-5.3-flash', name: 'GLM 5.3 Flash', desc: 'Z.ai • Vision', vision: true },
   { id: 'qwen/qwen3.6-flash', name: 'Qwen 3.6 Flash', desc: 'Fast • Vision', vision: true },
