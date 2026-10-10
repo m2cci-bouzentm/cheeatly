@@ -127,10 +127,14 @@ impl MeetingService {
                 return Err(error);
             }
         }
-        self.session
-            .lock()
-            .map_err(|_| anyhow!("Meeting lock poisoned"))?
-            .active = true;
+        {
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| anyhow!("Meeting lock poisoned"))?;
+            session.active = true;
+            session.started_at_ms = Some(chrono::Utc::now().timestamp_millis());
+        }
         self.events.send(Event::MeetingState(true));
         Ok(())
     }
@@ -404,6 +408,17 @@ pub(crate) mod tests {
                 _directory: directory,
             }
         }
+    }
+    #[tokio::test]
+    async fn start_time_is_set_while_active_and_cleared_after() {
+        let h = Harness::new();
+        assert_eq!(h.meeting.snapshot().unwrap().started_at_ms, None);
+        let before = chrono::Utc::now().timestamp_millis();
+        h.meeting.start(None).await.unwrap();
+        let started = h.meeting.snapshot().unwrap().started_at_ms.unwrap();
+        assert!(started >= before && started <= chrono::Utc::now().timestamp_millis());
+        h.meeting.discard().await.unwrap();
+        assert_eq!(h.meeting.snapshot().unwrap().started_at_ms, None);
     }
     #[tokio::test]
     async fn stop_drains_final_speech_and_saves_once() {

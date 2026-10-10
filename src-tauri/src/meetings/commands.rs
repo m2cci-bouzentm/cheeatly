@@ -16,6 +16,11 @@ pub struct SummaryUpdates {
 pub fn get_meeting_active(state: State<AppState>) -> Result<bool, String> {
     Ok(state.meetings.snapshot().map_err(error)?.active)
 }
+// Start time of the active meeting (Unix ms) for the overlay's elapsed timer; None when no meeting runs.
+#[tauri::command]
+pub fn get_meeting_started_at(state: State<AppState>) -> Result<Option<i64>, String> {
+    Ok(state.meetings.snapshot().map_err(error)?.started_at_ms)
+}
 #[tauri::command]
 pub async fn start_meeting(
     state: State<'_, AppState>,

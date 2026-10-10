@@ -11,6 +11,7 @@ pub struct MeetingSnapshot {
     pub generation: u64,
     pub transcript: Vec<TranscriptTurn>,
     pub partials: [Option<String>; 2],
+    pub started_at_ms: Option<i64>,
 }
 impl MeetingSnapshot {
     pub fn scan_text(&self, window: usize) -> String {

@@ -51,6 +51,7 @@ export interface DesktopAPI {
   showOverlay: () => Promise<void>;
   hideOverlay: () => Promise<void>;
   getMeetingActive: () => Promise<boolean>;
+  getMeetingStartedAt: () => Promise<number | null>;
   onMeetingStateChanged: (
     callback: (data: { isActive: boolean }) => void
   ) => () => void;

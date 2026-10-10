@@ -57,6 +57,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             meetings::commands::get_meeting_active,
+            meetings::commands::get_meeting_started_at,
             meetings::commands::start_meeting,
             meetings::commands::abort_meeting,
             meetings::commands::end_meeting,

@@ -140,6 +140,7 @@ export const desktopAPI: DesktopAPI = {
   setProviderPreferredModel: (provider, modelId) =>
     call('set_provider_preferred_model', { provider, modelId }),
   getMeetingActive: () => call('get_meeting_active'),
+  getMeetingStartedAt: () => call('get_meeting_started_at'),
   onMeetingStateChanged: (callback) => on('meeting-state-changed', callback),
   getIntelligenceContext: () => call('get_intelligence_context'),
   resetIntelligence: () => call('reset_intelligence'),
