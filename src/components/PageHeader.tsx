@@ -8,7 +8,10 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, onBack }: PageHeaderProps) {
   return (
-    <header className="relative w-full h-[36px] shrink-0 flex items-center pl-0 drag-region select-none bg-bg-secondary border-b border-border-subtle">
+    <header
+      data-tauri-drag-region="deep"
+      className="relative w-full h-[36px] shrink-0 flex items-center pl-0 drag-region select-none bg-bg-secondary border-b border-border-subtle"
+    >
       <div className="flex items-center gap-1.5 no-drag">
         {isMac && <div className="w-[70px]" />}
         <button
