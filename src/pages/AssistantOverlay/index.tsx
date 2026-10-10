@@ -173,19 +173,24 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
     setSuggestionPanelPinned(true);
   }, []);
 
-  const resetSessionUi = useCallback(() => {
+  // Chat, attachments and suggestion selection; shared by a new session and Reset session.
+  const clearConversation = useCallback(() => {
     answerPanelPinnedRef.current = false;
     setSuggestionPanelPinned(false);
     setInputValue('');
     setAttachedContext([]);
     setVariants({});
     setSelectedQuestionId(null);
-    setPausedChannels(null);
     setView('chat');
     stopServerChat();
     setMessages([]);
-    resetQuestionsRef.current();
   }, [setMessages, stopServerChat]);
+
+  const resetSessionUi = useCallback(() => {
+    clearConversation();
+    setPausedChannels(null);
+    resetQuestionsRef.current();
+  }, [clearConversation]);
 
   const meeting = useMeetingState({
     messages,
@@ -454,6 +459,19 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
     }
   };
 
+  // The backend clears transcript, suggestions and the timer; capture keeps running.
+  const resetSession = async () => {
+    setPopup(null);
+    try {
+      await window.desktopAPI.resetMeeting();
+    } catch (error) {
+      showToast(String(error));
+      return;
+    }
+    clearConversation();
+    showToast('Session reset');
+  };
+
   const setChannelMuted = (channel: 'mic' | 'system', muted: boolean) => {
     if (channel === 'mic') meeting.setMicMuted(muted);
     else meeting.setSystemMuted(muted);
@@ -715,6 +733,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
             onUndetectable={setUndetectable}
             onModel={selectModel}
             onBackToApp={backToApp}
+            onReset={() => void resetSession()}
             onDiscard={discard}
             onClose={() => setPopup(null)}
           />

@@ -41,6 +41,12 @@ pub async fn abort_meeting(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 #[tauri::command]
+pub async fn reset_meeting(state: State<'_, AppState>) -> Result<(), String> {
+    state.meetings.reset().await.map_err(error)?;
+    state.questions.reset()?;
+    Ok(())
+}
+#[tauri::command]
 pub async fn end_meeting(state: State<'_, AppState>) -> Result<Success, String> {
     state.meetings.end().await.map_err(error)?;
     let _ = state.questions.snapshot();

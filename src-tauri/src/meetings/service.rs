@@ -214,6 +214,24 @@ impl MeetingService {
         self.events.send(Event::SessionReset);
         Ok(())
     }
+    // Fresh start inside the running call: transcript, chat and timer reset while capture keeps going.
+    // The generation stays the same so the running capture keeps recording into this session.
+    pub async fn reset(&self) -> Result<()> {
+        let _guard = self.lifecycle.lock().await;
+        ensure!(self.snapshot()?.active, "No active meeting");
+        self.intelligence.reset()?;
+        {
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| anyhow!("Meeting lock poisoned"))?;
+            session.transcript.clear();
+            session.partials = Default::default();
+            session.started_at_ms = Some(chrono::Utc::now().timestamp_millis());
+        }
+        self.events.send(Event::MeetingState(true));
+        Ok(())
+    }
     pub async fn end(&self) -> Result<()> {
         let _guard = self.lifecycle.lock().await;
         if !self.snapshot()?.active {
@@ -408,6 +426,25 @@ pub(crate) mod tests {
                 _directory: directory,
             }
         }
+    }
+    #[tokio::test]
+    async fn reset_clears_transcript_and_restarts_timer_while_capture_continues() {
+        let h = Harness::new();
+        assert!(h.meeting.reset().await.is_err());
+        h.meeting.start(None).await.unwrap();
+        h.capture.speech("Before the reset", true, "user");
+        h.capture.speech("Half a sentence", false, "interviewer");
+        let started = h.meeting.snapshot().unwrap().started_at_ms.unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        h.meeting.reset().await.unwrap();
+        let snapshot = h.meeting.snapshot().unwrap();
+        assert!(snapshot.active);
+        assert!(snapshot.transcript.is_empty());
+        assert_eq!(snapshot.partials, [None, None]);
+        assert!(snapshot.started_at_ms.unwrap() > started);
+        assert!(h.capture.active());
+        h.capture.speech("After the reset", true, "user");
+        assert_eq!(h.meeting.snapshot().unwrap().transcript.len(), 1);
     }
     #[tokio::test]
     async fn start_time_is_set_while_active_and_cleared_after() {

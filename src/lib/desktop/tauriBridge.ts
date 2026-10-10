@@ -147,6 +147,7 @@ export const desktopAPI: DesktopAPI = {
   startMeeting: (metadata) => call('start_meeting', { metadata }),
   endMeeting: () => call('end_meeting'),
   abortMeeting: () => call('abort_meeting'),
+  resetMeeting: () => call('reset_meeting'),
   getRecentMeetings: () => call('get_recent_meetings'),
   getMeetingDetails: (id) => call('get_meeting_details', { id }),
   updateMeetingTitle: (id, title) =>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { OPENROUTER_MODELS } from '../../../utils/modelUtils';
-import { BackIcon, TrashIcon } from './icons.tsx';
+import { BackIcon, ResetIcon, TrashIcon } from './icons.tsx';
 
 type SessionMenuProps = {
   micOn: boolean;
@@ -12,6 +12,7 @@ type SessionMenuProps = {
   onUndetectable: (on: boolean) => void;
   onModel: (id: string) => void;
   onBackToApp: () => void;
+  onReset: () => void;
   onDiscard: () => void;
   onClose: () => void;
 };
@@ -27,6 +28,7 @@ const SessionMenu: React.FC<SessionMenuProps> = ({
   onUndetectable,
   onModel,
   onBackToApp,
+  onReset,
   onDiscard,
   onClose,
 }) => (
@@ -71,6 +73,10 @@ const SessionMenu: React.FC<SessionMenuProps> = ({
       <button className="menu-btn" onClick={onBackToApp}>
         <BackIcon />
         Back to app
+      </button>
+      <button className="menu-btn" onClick={onReset}>
+        <ResetIcon />
+        Reset session
       </button>
       <button className="menu-btn danger" onClick={onDiscard}>
         <TrashIcon />

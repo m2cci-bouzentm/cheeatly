@@ -473,3 +473,25 @@ test('Back to app stops overlay resizes so the launcher keeps its size', async (
   // Nothing may resize the window after it switched to the launcher size.
   expect(names.slice(names.indexOf('setWindowMode') + 1)).toEqual([]);
 });
+
+test('Reset session clears the conversation in one click and keeps the call running', async ({
+  page,
+}) => {
+  await openOverlay(page);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.desktopAPI.resetMeeting = async () => {
+      w.behavior.calls.push(['resetMeeting']);
+    };
+  });
+  await page.getByPlaceholder('Ask anything').fill('Draft that is about to go');
+  await page.getByRole('button', { name: 'More session options' }).click();
+  await page.getByRole('button', { name: 'Reset session', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Session reset' })).toBeVisible();
+  await expect(page.getByPlaceholder('Ask anything')).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Reset session' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'End and save' })).toBeVisible();
+  const calls = await page.evaluate(() => (window as any).behavior.calls);
+  expect(calls).toContainEqual(['resetMeeting']);
+  expect(calls.some((call: string[]) => call[0] === 'setWindowMode')).toBe(false);
+});

@@ -60,6 +60,7 @@ pub fn run() {
             meetings::commands::get_meeting_started_at,
             meetings::commands::start_meeting,
             meetings::commands::abort_meeting,
+            meetings::commands::reset_meeting,
             meetings::commands::end_meeting,
             meetings::commands::get_recent_meetings,
             meetings::commands::get_meeting_details,

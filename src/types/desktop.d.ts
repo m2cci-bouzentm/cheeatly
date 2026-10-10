@@ -253,6 +253,7 @@ export interface DesktopAPI {
   ) => Promise<{ success: boolean; error?: string }>;
   endMeeting: () => Promise<{ success: boolean; error?: string }>;
   abortMeeting: () => Promise<void>;
+  resetMeeting: () => Promise<void>;
   getRecentMeetings: () => Promise<
     Array<{
       id: string;
