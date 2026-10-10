@@ -6,7 +6,7 @@ mod store;
 pub use credentials::{CredentialService, StoredCredentials};
 pub use store::SettingsStore;
 
-// Migrate saved GPT-OSS choices when loading credentials or scan settings.
+// Migrate saved GPT-OSS and DeepSeek V4 Flash choices when loading credentials or scan settings.
 fn deserialize_model<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<String>, D::Error> {
@@ -14,6 +14,8 @@ fn deserialize_model<'de, D: serde::Deserializer<'de>>(
     Ok(Option::<String>::deserialize(deserializer)?.map(|model| {
         if model.starts_with("openai/gpt-oss-") {
             "qwen/qwen3.7-flash".to_owned()
+        } else if model == "deepseek/deepseek-v4-flash" {
+            "deepseek/deepseek-v4.1-flash".to_owned()
         } else {
             model
         }
@@ -25,10 +27,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn saved_gpt_oss_models_migrate_without_changing_other_preferences() {
+    fn saved_retired_models_migrate_without_changing_other_preferences() {
         for (old, expected) in [
             (Some("openai/gpt-oss-120b"), Some("qwen/qwen3.7-flash")),
             (Some("openai/gpt-oss-20b:free"), Some("qwen/qwen3.7-flash")),
+            (
+                Some("deepseek/deepseek-v4-flash"),
+                Some("deepseek/deepseek-v4.1-flash"),
+            ),
             (Some("z-ai/glm-5.3-flash"), Some("z-ai/glm-5.3-flash")),
             (Some(""), Some("")),
             (None, None),
