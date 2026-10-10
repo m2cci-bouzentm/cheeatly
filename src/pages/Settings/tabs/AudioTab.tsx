@@ -6,13 +6,10 @@ import {
   MapPin,
   Info,
   AlertCircle,
-  FlaskConical,
   Cpu,
 } from 'lucide-react';
-import { isMac } from '../../../utils/platformUtils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { CustomSelect, ProviderSelect } from '../SettingsLayout';
 
 import { useSettingsOverlayContext } from '../SettingsContext';
@@ -38,8 +35,6 @@ export const AudioTab: React.FC = () => {
     selectedOutput,
     setSelectedOutput,
     outputDevices,
-    useExperimentalSck,
-    setUseExperimentalSck,
   } = useSettingsOverlayContext();
 
   return (
@@ -299,53 +294,6 @@ export const AudioTab: React.FC = () => {
               <Speaker size={11} /> Test Sound
             </Button>
           </div>
-
-          {/* SCK Backend Toggle — macOS only. The ScreenCaptureKit
-                        backend is a CoreAudio alternative implemented in the
-                        Rust speaker module under #[cfg(target_os="macos")];
-                        Windows audio runs via WASAPI loopback so the toggle
-                        has no meaning there and routing "sck" as a device id
-                        silently breaks system audio. */}
-          {isMac && (
-            <>
-              <div className="h-px bg-border-subtle my-1.5" />
-              <div className="bg-amber-500/5 rounded-lg border border-amber-500/20 p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-2.5">
-                    <div className="mt-0.5 p-1 rounded-md bg-amber-500/10 text-amber-500">
-                      <FlaskConical size={16} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="text-sm font-bold text-text-primary">
-                          SCK Backend
-                        </h3>
-                        <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 uppercase tracking-wide">
-                          Alternative
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-text-secondary leading-relaxed max-w-[280px]">
-                        Use the ScreenCaptureKit backend. An optimized
-                        alternative to CoreAudio if you experience any capture
-                        issues.
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={useExperimentalSck}
-                    onCheckedChange={(newState) => {
-                      setUseExperimentalSck(newState);
-                      window.localStorage.setItem(
-                        'useExperimentalSckBackend',
-                        newState ? 'true' : 'false'
-                      );
-                    }}
-                    className="shrink-0 data-[state=checked]:bg-amber-500"
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>

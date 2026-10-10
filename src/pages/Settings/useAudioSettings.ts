@@ -11,7 +11,6 @@ export const useAudioSettings = (
   const [selectedInput, setSelectedInput] = useState('');
   const [selectedOutput, setSelectedOutput] = useState('');
   const [micLevel, setMicLevel] = useState(0);
-  const [useExperimentalSck, setUseExperimentalSck] = useState(false);
   // Main reports fallback when a saved device cannot be opened.
   const [deviceFallbackNotice, setDeviceFallbackNotice] = useState<{
     kind: 'input' | 'output';
@@ -125,10 +124,6 @@ export const useAudioSettings = (
       }
     };
     loadDevices();
-
-    const savedSck =
-      localStorage.getItem('useExperimentalSckBackend') === 'true';
-    setUseExperimentalSck(savedSck);
   }, [isOpen, selectedInput, selectedOutput]);
 
   useEffect(() => {
@@ -186,8 +181,6 @@ export const useAudioSettings = (
     setSelectedOutput,
     micLevel,
     setMicLevel,
-    useExperimentalSck,
-    setUseExperimentalSck,
     deviceFallbackNotice,
     setDeviceFallbackNotice,
     sttProvider,

@@ -128,7 +128,7 @@ impl SpeakerInput {
         // user picked a non-default output device they should be told that
         // this fallback path silently ignores it.
         if let Some(ref id) = device_id {
-            if !id.is_empty() && id != "default" && id != "sck" {
+            if !id.is_empty() && id != "default" {
                 eprintln!(
                     "[SpeakerInput] WARNING: ScreenCaptureKit fallback ignores device_id '{}' — will capture global system audio.",
                     id

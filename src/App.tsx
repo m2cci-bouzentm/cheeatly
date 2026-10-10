@@ -13,7 +13,6 @@ import {
   OVERLAY_OPACITY_DEFAULT,
   getDefaultOverlayOpacity,
 } from './lib/overlayAppearance';
-import { isMac } from './utils/platformUtils';
 import { hasSeenPermsToaster, markPermsToasterSeen } from './lib/firstRunFlags';
 import { analytics } from './lib/analytics/analytics.service';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -126,18 +125,7 @@ const App: React.FC = () => {
     try {
       localStorage.setItem('cheatly_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
-      let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
-      // Restored/cross-OS localStorage can carry the macOS-only SCK backend onto Windows.
-      const useExperimentalSck =
-        isMac && localStorage.getItem('useExperimentalSckBackend') === 'true';
-
-      if (useExperimentalSck) {
-        console.log('[App] Using ScreenCaptureKit backend (Experimental).');
-        outputDeviceId = 'sck';
-      }
-      if (!useExperimentalSck && isMac) {
-        console.log('[App] Using CoreAudio backend (Default).');
-      }
+      const outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
 
       const result = await window.desktopAPI.startMeeting({
         audio: { inputDeviceId, outputDeviceId },

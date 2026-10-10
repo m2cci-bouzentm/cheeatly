@@ -16,27 +16,21 @@ enum BackendInput {
 
 impl SpeakerInput {
     pub fn new(device_id: Option<String>) -> Result<Self> {
-        let force_sck = device_id.as_deref() == Some("sck");
-
-        if !force_sck {
-            // Try CoreAudio Tap first (Default)
-            println!("[SpeakerInput] Initializing CoreAudio Tap backend...");
-            match core_audio::SpeakerInput::new(device_id.clone()) {
-                Ok(input) => {
-                    println!("[SpeakerInput] CoreAudio Tap backend initialized.");
-                    return Ok(Self {
-                        backend: BackendInput::CoreAudio(input),
-                    });
-                }
-                Err(e) => {
-                    println!(
-                        "[SpeakerInput] CoreAudio Tap initialization failed: {}. Falling back to ScreenCaptureKit.",
-                        e
-                    );
-                }
+        // Try CoreAudio Tap first (Default)
+        println!("[SpeakerInput] Initializing CoreAudio Tap backend...");
+        match core_audio::SpeakerInput::new(device_id.clone()) {
+            Ok(input) => {
+                println!("[SpeakerInput] CoreAudio Tap backend initialized.");
+                return Ok(Self {
+                    backend: BackendInput::CoreAudio(input),
+                });
             }
-        } else {
-            println!("[SpeakerInput] SCK backend explicitly requested.");
+            Err(e) => {
+                println!(
+                    "[SpeakerInput] CoreAudio Tap initialization failed: {}. Falling back to ScreenCaptureKit.",
+                    e
+                );
+            }
         }
 
         // Fallback to ScreenCaptureKit
