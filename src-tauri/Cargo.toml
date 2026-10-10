@@ -1,0 +1,55 @@
+[package]
+name = "cheatly"
+version = "0.1.0"
+description = "AI meeting assistant"
+authors = ["Cheatly"]
+license = "ISC"
+edition = "2024"
+rust-version = "1.90"
+
+[lib]
+name = "cheatly_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.1", features = [] }
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+cheatly-audio = { path = "../crates/cheatly-audio" }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+log = "0.4"
+open = "5"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+ringbuf = "0.4"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+screenshots = "0.8"
+tauri = { version = "2.12.1", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-os = "2"
+tauri-plugin-process = "2"
+tauri-plugin-shell = "2"
+tokio = { version = "1", features = ["process", "sync", "io-util", "rt-multi-thread", "time"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.25"
+core-foundation = "0.10"
+foreign-types = "0.5"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
+objc2-av-foundation = { version = "0.3", features = ["AVCaptureDevice", "AVMediaFormat", "block2"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -29,16 +29,10 @@ enum ParakeetModel {
 
 struct CliOptions {
     let modelName: String
-    let language: String?
-    let samplePath: String?
-    let chunkSeconds: Double
 
     static func parse(_ args: [String]) -> CliOptions {
         CliOptions(
-            modelName: value("--model", in: args) ?? ParakeetModel.defaultName,
-            language: value("--language", in: args) ?? "auto",
-            samplePath: value("--sample", in: args),
-            chunkSeconds: doubleValue("--chunk-seconds", in: args) ?? 0.25
+            modelName: value("--model", in: args) ?? ParakeetModel.defaultName
         )
     }
 
@@ -49,30 +43,16 @@ struct CliOptions {
 
         return args[index + 1]
     }
-
-    private static func doubleValue(_ name: String, in args: [String]) -> Double? {
-        guard let value = value(name, in: args) else {
-            return nil
-        }
-
-        return Double(value)
-    }
 }
 
 enum CliError: LocalizedError {
-    case missingSamplePath
     case invalidCommand(String)
-    case invalidAudio(String)
     case invalidInput(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingSamplePath:
-            "Missing --sample path."
         case .invalidCommand(let command):
             "Unknown command: \(command)."
-        case .invalidAudio(let message):
-            "Invalid audio: \(message)."
         case .invalidInput(let message):
             "Invalid input: \(message)."
         }

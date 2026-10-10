@@ -26,3 +26,6 @@
 *.ttf binary
 *.eot binary
 *.node binary
+*.pdf binary
+*.docx binary
+*.icns binary

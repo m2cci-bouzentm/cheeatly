@@ -1,0 +1,228 @@
+/*
+  Live call overlay. Ported from the approved design docs/prototypes/live-call-v17.html
+  (spec: docs/prototypes/live-call-v13-spec.md + v14 to v17 additions). Values are copied
+  verbatim from the mock; every selector is scoped under .lc so nothing leaks into the app.
+  Prototype ids became classes: #body -> .lc-thread, #cues -> .lc-cues, #tip -> .lc-tip,
+  #session -> .session-menu, #more -> .more-btn.
+*/
+
+/* Base, from the mock's :root and resets */
+.lc {
+  --muted: #a6a6ad;
+  --green: #81d5b2;
+  --line: #ffffff12;
+  --panel: #242427;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #e9e9ed;
+  font-synthesis: none;
+  /* The app sets antialiased smoothing globally; the design was reviewed with the browser default. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  font-size: 16px;
+  line-height: normal;
+  width: 712px;
+  /* Room for the tooltips above the pill and under the composer, and for the toast:
+     the native window is exactly this box, so nothing can render outside it. */
+  padding: 30px 0 46px;
+}
+.lc *,
+.lc *::before,
+.lc *::after { box-sizing: border-box; }
+.lc button,
+.lc input,
+.lc select { font: inherit; }
+.lc button { cursor: pointer; color: inherit; border: 0; background: none; }
+.lc button:disabled { cursor: default; opacity: 0.45; }
+.lc button:focus-visible,
+.lc input:focus-visible,
+.lc select:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.lc button { touch-action: manipulation; }
+.lc .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.lc svg.i { width: 15px; height: 15px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Pill */
+.lc .pill { width: max-content; display: flex; align-items: center; gap: 2px; background: #252528f5; border: 1px solid #ffffff17; border-radius: 99px; padding: 4px; margin-bottom: 8px; box-shadow: 0 5px 14px #0003; font-size: 12px; position: relative; }
+.lc .grip { touch-action: none; cursor: grab; padding: 6px 2px 6px 8px; color: #7d7d86; display: grid; user-select: none; }
+.lc .grip svg { width: 12px; height: 14px; pointer-events: none; }
+.lc .grip:active { cursor: grabbing; }
+.lc .pill-logo { width: 18px; height: 18px; color: #a9a9b0; margin: 0 4px; }
+.lc .timer { display: flex; align-items: center; gap: 7px; padding: 0 10px 0 6px; font-variant-numeric: tabular-nums; color: #d9d9de; }
+.lc .dot { width: 7px; height: 7px; border-radius: 50%; background: #ef6b6b; }
+.lc .dot.paused { background: #d8b776; animation: none; }
+.lc .sep { width: 1px; height: 16px; background: #ffffff18; margin: 0 4px; }
+.lc .ib { width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; color: #c4c4cb; padding: 1px 6px; }
+.lc .ib:hover,
+.lc .ib[aria-expanded='true'] { background: #ffffff10; color: #fff; }
+.lc .ib.stop { margin-left: 6px; }
+.lc .ib.stop.confirm { width: auto; padding: 0 11px; background: #673b40; color: #ffdbdc; font-size: 12px; gap: 6px; display: flex; align-items: center; }
+/* v1 KEEP: ··· button (v1 .pill button rules, scoped so the kept v2 pill buttons stay as they are) */
+.lc .pill .more-btn { border-radius: 20px; padding: 8px 10px; font-size: 11px; }
+.lc .pill .more-btn:hover { background: #ffffff0c; }
+
+/* Tooltip: one floating element, positioned by the overlay (fixed, never clipped by panel overflow) */
+.lc .lc-tip { position: fixed; white-space: nowrap; background: #111214; color: #e4e4e8; border: 1px solid #ffffff14; font-size: 11px; padding: 5px 8px; border-radius: 6px; pointer-events: none; z-index: 30; animation: lc-tip 0.12s both; }
+
+/* Panels */
+.lc .panels { display: grid; grid-template-columns: minmax(0, 444px) 260px; gap: 8px; align-items: start; }
+.lc .panel { background: #242427; border: 1px solid #ffffff13; box-shadow: 0 8px 20px #0003; border-radius: 14px; }
+.lc .main { display: flex; flex-direction: column; position: relative; }
+/* v1 KEEP: view selector, rules copied verbatim from live-call.html */
+.lc .main-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 10px; gap: 6px; }
+.lc .main-header { padding: 10px 16px 7px; }
+.lc .tabs { display: flex; gap: 16px; }
+.lc .tab { font-size: 12px; font-weight: 500; color: #8f9097; padding: 5px 0 6px; border-bottom: 2px solid transparent; }
+.lc .tab:hover { color: #d4d4da; }
+.lc .tab[aria-selected="true"] { color: #e9e9ed; border-bottom-color: #e9e9ed; }
+.lc .engine { display: flex; align-items: center; gap: 8px; color: #8f9097; font-size: 12px; padding: 6px 0 10px; margin: 0; }
+.lc .engine svg { animation: lc-spin 0.8s linear infinite; }
+.lc .lc-thread { padding: 8px 18px 6px; overflow: auto; position: relative; }
+/* One thread, Cluely style: request bubble on the right, answer under it, newest scrolled to the top */
+.lc .chat-turn + .chat-turn { margin-top: 18px; }
+.lc .ub { width: fit-content; max-width: 80%; margin: 0 0 10px auto; background: #34343a; color: #ededf1; font-size: 13px; line-height: 1.45; padding: 7px 11px; border-radius: 12px 12px 3px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lc .ub .shots { display: flex; gap: 5px; justify-content: flex-end; margin-bottom: 6px; }
+.lc .ub .shots img { width: 64px; height: 40px; border-radius: 5px; object-fit: cover; box-shadow: 0 0 0 1px #ffffff26; display: block; }
+/* Overflow cue copied from Cluely: content fades out at the bottom and a round ↓ jumps to the end */
+.lc .scrollwrap { position: relative; }
+.lc .lc-cues { overflow: auto; }
+.lc .more { -webkit-mask-image: linear-gradient(#000 calc(100% - 44px), transparent); mask-image: linear-gradient(#000 calc(100% - 44px), transparent); }
+.lc .down { position: absolute; right: 12px; bottom: 8px; width: 28px; height: 28px; border-radius: 50%; background: #2f2f33; box-shadow: 0 0 0 1px #ffffff1f, 0 4px 10px #0006; display: grid; place-items: center; color: #d4d4da; padding: 0; }
+.lc .down:hover { color: #fff; background: #3a3a3f; }
+.lc .down svg.i { width: 14px; height: 14px; }
+/* Scrollbars like Cluely: thin, rounded, translucent thumb, no track */
+.lc .lc-thread,
+.lc .lc-cues { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+.lc .lc-thread::-webkit-scrollbar,
+.lc .lc-cues::-webkit-scrollbar { width: 6px; }
+.lc .lc-thread::-webkit-scrollbar-thumb,
+.lc .lc-cues::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 99px; }
+.lc .lc-thread::-webkit-scrollbar-track,
+.lc .lc-cues::-webkit-scrollbar-track { background: transparent; }
+.lc .answer { font-size: 15px; font-weight: 400; line-height: 1.6; color: #f1f1f4; margin: 0; text-wrap: pretty; transition: opacity 0.3s; overflow-wrap: anywhere; }
+/* Markdown inside an answer (real answers can carry lists and code; the mock only had plain text) */
+.lc .answer p { margin: 0; }
+.lc .answer p + p,
+.lc .answer ul,
+.lc .answer ol,
+.lc .answer pre { margin-top: 8px; }
+.lc .answer ul,
+.lc .answer ol { padding-left: 20px; }
+.lc .answer ul { list-style: disc; }
+.lc .answer ol { list-style: decimal; }
+.lc .answer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #ffffff0d; border-radius: 4px; padding: 1px 4px; }
+.lc .answer pre { background: #ffffff0a; border-radius: 8px; padding: 8px 10px; overflow: auto; }
+.lc .answer pre code { background: none; padding: 0; }
+.lc .answer strong { font-weight: 600; }
+.lc .answer.error { color: #eda7a9; }
+.lc .tools { display: flex; gap: 2px; margin: 8px -7px 0; opacity: 0.75; transition: opacity 0.15s; }
+.lc .main:hover .tools,
+.lc .tools:focus-within { opacity: 1; }
+.lc .tools .ib { width: 28px; height: 28px; border-radius: 7px; }
+.lc .skel { height: 11px; border-radius: 5px; background: linear-gradient(90deg, #ffffff0a, #ffffff16, #ffffff0a); background-size: 200% 100%; animation: lc-shine 1s linear infinite; margin: 6px 0 12px; }
+.lc .skel + .skel { width: 62%; }
+/* Transcript view */
+.lc .turn { font-size: 13px; line-height: 1.5; margin: 0 0 10px; color: #d6d6db; }
+.lc .turn b { display: block; font-size: 11px; font-weight: 500; color: #8e9097; }
+.lc .turn.me b { color: #86b9a1; }
+.lc .turn.partial { opacity: 0.6; }
+.lc .quiet { font-size: 12px; color: #8e9097; padding: 4px 0 12px; }
+
+/* v1 KEEP: composer footer, rules copied verbatim from live-call.html (base rule, then its v1 override) */
+.lc .foot { border-top: 1px solid var(--line); padding: 11px 13px 9px; background: #ffffff02; }
+.lc .foot { background: none; padding: 10px 14px 14px; }
+/* v2 composer sits inside the v1 .foot, so it drops its own outer margin */
+.lc .compose { position: relative; display: flex; align-items: center; gap: 2px; margin: 6px 10px 10px; background: #ffffff06; border: 1px solid #ffffff0d; border-radius: 10px; padding: 3px; }
+.lc .foot .compose { margin: 0; }
+.lc .compose input { min-width: 0; flex: 1; border: 0; background: none; color: #ededf1; font-size: 13px; padding: 7px 6px; outline: none; }
+.lc .compose input::placeholder { color: #85858f; }
+.lc .compose:focus-within { border-color: #81d5b244; }
+.lc .compose .ib { width: 28px; height: 28px; border-radius: 7px; }
+.lc .send { color: #b6d9c7; }
+/* Screenshot attachments: thumbnails above the input, also shown inside the sent bubble */
+.lc .attachments { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 10px 6px; }
+.lc .thumb { position: relative; width: 52px; height: 34px; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px #ffffff26; flex: none; }
+.lc .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lc .thumb .rm { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #000a; color: #fff; display: grid; place-items: center; padding: 0; opacity: 0; }
+.lc .thumb:hover .rm,
+.lc .thumb:focus-within .rm { opacity: 1; }
+.lc .thumb .rm svg.i { width: 10px; height: 10px; stroke-width: 2.4; }
+
+/* Suggestions panel */
+.lc .side { overflow: hidden; }
+/* v1 KEEP: Suggestions header, rules copied verbatim from live-call.html */
+.lc .side-head { padding: 15px 15px 11px; display: flex; align-items: center; justify-content: space-between; }
+.lc .side-head h2 { font-size: 12px; font-weight: 600; margin: 0; }
+.lc .side-head { padding: 13px 16px 8px; }
+.lc .suggestions-switch { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #b7bbc0; }
+/* Scan now: sits left of the switch; 20px tall so the kept v1 header keeps its height */
+.lc .side-tools { display: flex; align-items: center; gap: 8px; }
+.lc .side-tools .ib { width: 20px; height: 20px; border-radius: 5px; padding: 0; }
+.lc .side-tools .ib svg.i { width: 13px; height: 13px; }
+.lc .ib.scanning { color: #9cc6f1; }
+.lc .ib.scanning svg { animation: lc-spin 0.8s linear infinite; }
+.lc .cue { position: relative; }
+.lc .cue + .cue { border-top: 1px solid #ffffff0d; }
+.lc .cue-open { display: block; width: 100%; text-align: left; padding: 12px 38px 12px 14px; font-size: 14px; line-height: 1.45; color: #dcdce1; }
+.lc button.cue-open:hover,
+.lc .cue.selected .cue-open { background: #ffffff09; color: #fff; }
+.lc .cue-dismiss { position: absolute; right: 6px; top: 8px; opacity: 0; }
+.lc .cue:hover .cue-dismiss,
+.lc .cue:focus-within .cue-dismiss { opacity: 1; }
+.lc .cue.fresh { animation: lc-fresh 1.2s ease-out 2; }
+/* v1 KEEP: suggestion categories, rules copied verbatim from live-call.html */
+.lc .cue-label { display: flex; justify-content: space-between; align-items: center; font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; font-weight: 650; color: #dfbd87; }
+.lc .cue-label small { font-size: 9px; text-transform: none; letter-spacing: 0; color: #979da0; font-weight: 400; }
+.lc .cue-label { color: #b3b7bb; font-size: 10px; letter-spacing: 0.04em; }
+/* v1 cards had normal line-height */
+.lc .cue-open .cue-label { line-height: normal; }
+
+/* Toggle switch (Suggestions header and Session options) */
+.lc .sw { appearance: none; width: 26px; height: 15px; border-radius: 99px; background: #ffffff1f; position: relative; cursor: pointer; margin: 0; flex: none; transition: background 0.15s; }
+.lc .sw::after { content: ''; position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #d9d9de; top: 2px; left: 2px; transition: left 0.15s; }
+.lc .sw:checked { background: #5fa886; }
+.lc .sw:checked::after { left: 13px; }
+
+/* v1 KEEP: Session options dropdown, rules copied verbatim from live-call.html */
+.lc .popover { position: absolute; right: 12px; top: 48px; width: 264px; background: #303034; border: 1px solid #ffffff1e; border-radius: 12px; box-shadow: 0 12px 30px #0007; padding: 15px; z-index: 10; font-size: 12px; }
+.lc .popover h3 { font-size: 12px; margin: 0 0 13px; font-weight: 700; }
+.lc .popover label { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 13px 0; font-size: 11px; color: #d0d2d7; }
+.lc .popover select { width: 100%; padding: 7px; background: #252529; border: 1px solid #ffffff20; color: #dadde0; border-radius: 6px; font-size: 11px; }
+.lc .popover input { accent-color: #85d8b4; }
+.lc .popover .close { float: right; color: #c4c7c7; font-size: 16px; padding: 1px 6px; line-height: normal; }
+/* Session options belongs to the pill: anchored under its ··· button, right edges aligned
+   (+1px: offsets are measured inside the pill's 1px border); every row must show */
+.lc .popover.session-menu { top: calc(100% + 9px); right: -1px; max-height: none; overflow: visible; }
+/* Session actions read as buttons: full width, bordered, icon + label; Discard tinted red */
+.lc .menu-btns { display: grid; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #ffffff14; }
+.lc .menu-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border-radius: 8px; background: #ffffff0d; border: 1px solid #ffffff1a; color: #e4e4e8; font-size: 12px; text-align: left; }
+.lc .menu-btn:hover { background: #ffffff17; color: #fff; }
+.lc .menu-btn svg.i { width: 14px; height: 14px; }
+.lc .menu-btn.danger { background: #673b4026; border-color: #eda7a933; color: #eda7a9; }
+.lc .menu-btn.danger:hover { background: #673b404d; color: #ffd0d2; }
+
+/* v1 text buttons, used by the warning lines above the composer */
+.lc .text-btn { font-size: 11px; padding: 6px 8px; border-radius: 6px; color: #b7bbc0; }
+.lc .text-btn:hover { background: #ffffff09; color: #f6f6f8; }
+
+/* Quick actions (⚡) menu: belongs to the composer, opens under the ⚡ button */
+.lc .qa { position: absolute; z-index: 10; width: 236px; background: #2c2c30; border: 1px solid #ffffff1c; border-radius: 12px; box-shadow: 0 12px 30px #0007; padding: 6px; font-size: 12px; }
+.lc .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; padding: 7px 8px; border-radius: 7px; color: #d4d5da; }
+.lc button.row:hover { background: #ffffff0a; color: #fff; }
+.lc .row small { color: #8e9097; }
+
+/* Toast, finish and error cards */
+.lc .toast { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 20; background: #2c2c30; color: #e5e5ea; padding: 8px 13px; border: 1px solid #ffffff1c; border-radius: 8px; font-size: 12px; box-shadow: 0 5px 22px #0005; pointer-events: none; animation: lc-tip 0.15s both; white-space: nowrap; }
+.lc .finish { background: #28282cf7; border: 1px solid #ffffff15; border-radius: 16px; width: 340px; max-width: 100%; margin: 0 auto; padding: 20px; box-shadow: 0 15px 50px #0006; font-size: 13px; }
+.lc .finish h2 { font-size: 16px; font-weight: 550; margin: 0 0 6px; }
+.lc .finish p { color: #a9abb2; margin: 0 0 14px; line-height: 1.5; }
+.lc .finish button { border-radius: 8px; background: #ffffff10; padding: 8px 12px; font-size: 12px; margin-right: 6px; }
+.lc .finish .danger { background: #673b40; color: #ffdbdc; }
+
+@keyframes lc-shine { to { background-position: -200% 0; } }
+@keyframes lc-tip { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lc-fresh { 0% { background: #81d5b230; } 100% { background: transparent; } }
+@keyframes lc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .lc *,
+  .lc *::before,
+  .lc *::after { animation: none !important; transition: none !important; }
+}
