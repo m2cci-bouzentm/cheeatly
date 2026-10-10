@@ -22,7 +22,7 @@ const mix = (min: number, max: number, value: number) =>
 export const OVERLAY_OPACITY_MIN = 0.35;
 const OVERLAY_OPACITY_MAX = 1;
 export const OVERLAY_OPACITY_DEFAULT = 0.65;
-const OVERLAY_OPACITY_DEFAULT_DARK = 0.9;
+const OVERLAY_OPACITY_DEFAULT_DARK = 0.8;
 
 export const getDefaultOverlayOpacity = (): number =>
   OVERLAY_OPACITY_DEFAULT_DARK;
