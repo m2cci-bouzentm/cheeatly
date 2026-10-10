@@ -1,72 +1,46 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  AnimatePresence,
-  motion,
-  useMotionValue,
-  useTransform,
-} from 'framer-motion';
-import {
-  ExternalLink,
-  Pause,
-  Play,
-  ScanSearch,
-  LoaderCircle,
-  PanelRightOpen,
-  PanelRightClose,
-  Sparkles,
-  LayoutList,
-  ChevronDown,
-  SlidersHorizontal,
-} from 'lucide-react';
-import { prettifyModelId } from '../../utils/modelUtils';
-import {
-  widthDerivedScrollMax,
-  verticalScrollCap,
-} from '../../lib/overlayScrollBudget.ts';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { FileUIPart } from 'ai';
+import { verticalScrollCap } from '../../lib/overlayScrollBudget.ts';
 import { useShortcuts } from '../../hooks/useShortcuts.ts';
 import { useServerChat } from '../../hooks/useServerChat.ts';
-import {
-  getOverlayAppearance,
-  OVERLAY_OPACITY_DEFAULT,
-} from '../../lib/overlayAppearance.ts';
+import { modelSupportsVision, prettifyModelId } from '../../utils/modelUtils';
 import { isMac } from '../../utils/platformUtils.ts';
-import { cn } from '../../lib/utils.ts';
-import ModelSelectorWindow from '../ModelSelector';
-import SettingsPopup from '../SettingsPopup';
-import TopPill from '../../components/ui/TopPill.tsx';
-import { Card } from '../../components/ui/card.tsx';
-import { Button } from '../../components/ui/button.tsx';
-import SuggestionPanel from './components/SuggestionPanel.tsx';
-import SuggestionControls from './components/SuggestionControls.tsx';
-import TranscriptPanel from './components/TranscriptPanel.tsx';
-import QuestionsPanel from '../../components/questions/QuestionsPanel.tsx';
-import FocusView from './components/FocusView.tsx';
+import { analytics } from '../../lib/analytics/analytics.service';
 import { useDetectedQuestions } from '../../hooks/meeting/useDetectedQuestions.ts';
 import type { DetectedQuestion } from '../../hooks/meeting/useDetectedQuestions.ts';
-import {
-  formatProviderLabel,
-  getSttSummary,
-  useMessageRenderer,
-} from './components/MessageComponents.tsx';
+import { getSttSummary } from './components/MessageComponents.tsx';
 import { useSuggestionActions } from '../../hooks/meeting/useSuggestionActions.ts';
 import { useMeetingState } from '../../hooks/meeting/useMeetingState.ts';
 import { useOverlayKeyboard } from '../../hooks/meeting/useOverlayKeyboard.ts';
 import { collapseConsecutiveDuplicateAssistantMessages } from '../../lib/overlayActionDedup.ts';
-import type {
-  AttachmentContext,
-  AppMessage,
-  AssistantOverlayProps,
-} from './types.ts';
+import type { AttachmentContext, AppMessage, AssistantOverlayProps, SttSummary } from './types.ts';
 import { getMessageText } from './types.ts';
+import './live/liveCall.css';
+import RecordingPill from './live/RecordingPill.tsx';
+import SessionMenu from './live/SessionMenu.tsx';
+import ConversationPanel from './live/ConversationPanel.tsx';
+import type { ConversationView } from './live/ConversationPanel.tsx';
+import ChatThread from './live/ChatThread.tsx';
+import type { AnswerVariant, ThreadTurn } from './live/ChatThread.tsx';
+import TranscriptView from './live/TranscriptView.tsx';
+import SuggestionsPanel from './live/SuggestionsPanel.tsx';
+import TooltipLayer from './live/TooltipLayer.tsx';
+import { useMeetingClock } from './live/useMeetingClock.ts';
+import { useOverflowCue } from './live/useOverflowCue.ts';
+import { ANGLE_INSTRUCTION, SHORTER_INSTRUCTION, rewriteAnswer } from './live/rewriteAnswer.ts';
+import { formatShortcut, promptOf, requestLabel, scanResultMessage } from './live/format.ts';
 
-const SHELL_WIDTH_COLLAPSED = 600;
+type Toast = { text: string; id: number };
+// Channel mute states saved when capture is paused, restored on resume.
+type PausedChannels = { micMuted: boolean; systemMuted: boolean };
+type UserScan = { revision: number; ids: Set<string> };
+
+// Design maximum for the answer panel body (Chat and Transcript share it) and the suggestions list.
+const LIST_MAX_HEIGHT = 380;
+const TOAST_MS = 2600;
+// Room kept under an open menu so its 0 12px 30px shadow is not cut by the window edge.
+const MENU_SHADOW_ROOM = 42;
+const NO_VARIANT: AnswerVariant = { short: null, alt: null, showing: 'base', busy: false };
 
 function roleLabel(role: string): string {
   if (role === 'user') return 'User';
@@ -77,215 +51,112 @@ const updateShellDimensions = (width: number, height: number) => {
   window.desktopAPI.updateContentDimensions({ width, height });
 };
 
-const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
-  overlayOpacity = OVERLAY_OPACITY_DEFAULT,
-}) => {
-  const isLightTheme = false;
-  const { shortcuts, isShortcutPressed } = useShortcuts();
+// The native window is exactly the overlay: its own box plus any open menu hanging below it.
+function measureOverlay(root: HTMLElement): { width: number; height: number } {
+  const box = root.getBoundingClientRect();
+  let right = box.right;
+  let bottom = box.bottom;
+  root.querySelectorAll('.popover, .qa').forEach((el) => {
+    const r = el.getBoundingClientRect();
+    right = Math.max(right, r.right);
+    bottom = Math.max(bottom, r.bottom + MENU_SHADOW_ROOM);
+  });
+  return { width: Math.ceil(right - box.left), height: Math.ceil(bottom - box.top) };
+}
 
-  const shellRef = useRef<HTMLDivElement>(null);
+// Thread turns: each request (user message) with the answer that follows it. A failed request
+// gets its error as the answer instead of waiting forever.
+function buildTurns(messages: AppMessage[], isProcessing: boolean, error: Error | undefined): ThreadTurn[] {
+  const turns: ThreadTurn[] = [];
+  messages.forEach((message) => {
+    const text = getMessageText(message);
+    if (message.role === 'user') {
+      turns.push({
+        key: message.id,
+        label: requestLabel(message, text),
+        shots: message.parts.filter((part): part is FileUIPart => part.type === 'file').map((part) => part.url),
+        answer: null,
+        streaming: false,
+      });
+      return;
+    }
+    const last = turns[turns.length - 1];
+    if (!last) return;
+    last.answer = { id: message.id, text, isError: message.metadata?.isError === true };
+  });
+  const last = turns[turns.length - 1];
+  if (!last) return turns;
+  if (isProcessing) last.streaming = true;
+  if (error && !last.answer?.text) last.answer = { id: `error-${last.key}`, text: error.message, isError: true };
+  return turns;
+}
+
+function sttNotice(summary: SttSummary): string | null {
+  if (summary.tone !== 'error') return null;
+  return `${summary.label}: ${summary.detail}`;
+}
+
+function contextFrom(messages: AppMessage[]): string {
+  return messages
+    .filter((m) => m.role !== 'user' || !m.metadata?.hasScreenshot)
+    .map((m) => `${roleLabel(m.role)}: ${getMessageText(m)}`)
+    .slice(-20)
+    .join('\n');
+}
+
+const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
+  // State
+  // Panels visible. Hide keeps the pill on screen; the global toggle (⌘B) still hides the whole window.
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [view, setView] = useState<ConversationView>('chat');
+  const [inputValue, setInputValue] = useState('');
+  const [, setSuggestionPanelPinned] = useState(false);
+  const [popup, setPopup] = useState<'session' | 'actions' | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [endingMeeting, setEndingMeeting] = useState(false);
+  const [meetingEndError, setMeetingEndError] = useState('');
+  const [attachedContext, setAttachedContext] = useState<AttachmentContext[]>([]);
+  const [currentModel, setCurrentModel] = useState('qwen/qwen3.7-flash');
+  const [isUndetectable, setIsUndetectable] = useState(false);
+  const [stealthTapActive, setStealthTapActive] = useState(false);
+  const [stealthPermissionMissing, setStealthPermissionMissing] = useState(false);
+  const [stealthHotkeyConflict, setStealthHotkeyConflict] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [variants, setVariants] = useState<Record<string, AnswerVariant>>({});
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
+  const [verticalCap, setVerticalCap] = useState(Infinity);
+  const [announcement, setAnnouncement] = useState('');
+  const [pausedChannels, setPausedChannels] = useState<PausedChannels | null>(null);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
   const rafDimUpdateRef = useRef<number | null>(null);
-  const assistantScrollTopRef = useRef(0);
   const pendingCaptureRef = useRef<AttachmentContext | null>(null);
   const isExpandedEffectInitializedRef = useRef(false);
-  const hasRenderedExpandedRef = useRef(false);
   const isStealthRef = useRef(false);
   const stealthTapActiveRef = useRef(false);
   const stealthAutoEngageOkRef = useRef(true);
   const isCgEventTapAvailableRef = useRef(false);
-
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<'assistant' | 'transcript'>(
-    'assistant'
-  );
-  const [inputValue, setInputValue] = useState('');
-  const [answerPanelPinned, setSuggestionPanelPinned] = useState(false);
   const answerPanelPinnedRef = useRef(false);
-  const [popup, setPopup] = useState<'model' | 'settings' | null>(null);
-  const isSettingsOpen = popup === 'settings';
-  const [endingMeeting, setEndingMeeting] = useState(false);
-  const [meetingEndError, setMeetingEndError] = useState('');
   const endingMeetingRef = useRef(false);
-  const [conversationContext, setConversationContext] = useState('');
-  const [attachedContext, setAttachedContext] = useState<AttachmentContext[]>(
-    []
-  );
-  const [currentModel, setCurrentModel] = useState('gemini-3-flash-preview');
-  const [isUndetectable, setIsUndetectable] = useState(false);
-  const [hideChatHidesWidget] = useState(() => {
-    const stored = localStorage.getItem('cheatly_hideChatHidesWidget');
-    return stored ? stored === 'true' : true;
-  });
-  const [stealthTapActive, setStealthTapActive] = useState(false);
-  const [stealthPermissionMissing, setStealthPermissionMissing] =
-    useState(false);
-  const [stealthHotkeyConflict, setStealthHotkeyConflict] = useState<
-    string | null
-  >(null);
-  const [llmProviderLabel, setLlmProviderLabel] = useState('unknown');
-  const [llmPrivacyLabel, setLlmPrivacyLabel] = useState<string | null>(null);
-  const [screenContextStatus, setScreenContextStatus] = useState<
-    'not_available' | 'available' | 'failed'
-  >('not_available');
-  const [latestUsedImageInput, setLatestUsedImageInput] = useState(false);
-  const [latestVisionProviderUsed, setLatestVisionProviderUsed] = useState<
-    string | undefined
-  >(undefined);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [latestVisionModelUsed, setLatestVisionModelUsed] = useState<
-    string | undefined
-  >(undefined);
-  const [latestVisionFailureReason, setLatestVisionFailureReason] = useState<
-    string | undefined
-  >(undefined);
-  const {
-    messages,
-    setMessages,
-    stop: stopServerChat,
-    sendWithSystem,
-    status: chatStatus,
-  } = useServerChat();
-  const isStreaming = chatStatus === 'streaming';
-
-  const [questionsPanelOpen, setQuestionsPanelOpen] = useState(true);
-  const [focusMode, setFocusMode] = useState(true);
-
-  const shellWidth = useMotionValue(SHELL_WIDTH_COLLAPSED);
-  const verticalCap = useMotionValue(Infinity);
-  const scrollMaxH = useTransform(
-    [shellWidth, verticalCap],
-    ([w, cap]: number[]) => Math.min(widthDerivedScrollMax(w), cap)
-  );
-
-  const appearance = useMemo(
-    () => getOverlayAppearance(overlayOpacity),
-    [overlayOpacity]
-  );
-  const overlayPanelClass = 'overlay-text-primary';
-  const quickActionClass = 'overlay-chip-surface overlay-text-interactive';
-  const controlSurfaceClass =
-    'overlay-control-surface overlay-text-interactive';
-
-  useEffect(() => {
-    if (!toastMessage) return;
-    const timer = setTimeout(() => setToastMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
-
-  const hasActiveSystemAnswer = useMemo(
-    () =>
-      messages.some(
-        (m) =>
-          m.role === 'assistant' &&
-          (isStreaming || getMessageText(m).trim().length > 0)
-      ),
-    [messages, isStreaming]
-  );
-  useEffect(() => {
-    if (hasActiveSystemAnswer) {
-      answerPanelPinnedRef.current = true;
-      setSuggestionPanelPinned(true);
-    }
-  }, [hasActiveSystemAnswer]);
-  useEffect(() => {
-    answerPanelPinnedRef.current = answerPanelPinned;
-  }, [answerPanelPinned]);
-
-  const pinSuggestionPanel = useCallback(() => {
-    answerPanelPinnedRef.current = true;
-    setSuggestionPanelPinned(true);
-  }, []);
-
-  const displayMessages = useMemo(
-    () =>
-      collapseConsecutiveDuplicateAssistantMessages(messages, getMessageText),
-    [messages]
-  );
-
-  const saveAssistantScrollPosition = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (container) assistantScrollTopRef.current = container.scrollTop;
-  }, []);
-
-  const handleTabChange = useCallback(
-    (nextTab: 'assistant' | 'transcript') => {
-      if (activeTab === 'assistant') saveAssistantScrollPosition();
-      setActiveTab(nextTab);
-    },
-    [activeTab, saveAssistantScrollPosition]
-  );
-
-  const resetShellWidth = useCallback(() => {
-    shellWidth.set(SHELL_WIDTH_COLLAPSED);
-  }, [shellWidth]);
-
   const resetQuestionsRef = useRef<() => void>(() => {});
+  const userScanRef = useRef<UserScan | null>(null);
+  const toastSeqRef = useRef(0);
+  const submitRef = useRef<() => void>(() => {});
+  const toggleHideRef = useRef<() => void>(() => {});
+  const toggleCaptureRef = useRef<() => void>(() => {});
 
-  const resetSessionUi = useCallback(() => {
-    setMessages([]);
-    resetShellWidth();
-    answerPanelPinnedRef.current = false;
-    setSuggestionPanelPinned(false);
-    setInputValue('');
-    setAttachedContext([]);
-    stopServerChat();
-    setMessages([]);
-    resetQuestionsRef.current();
-  }, [resetShellWidth, setMessages, stopServerChat]);
-
-  const meeting = useMeetingState({
-    messages,
-    messagesEndRef,
-    setMessages,
-    setIsExpanded,
-    stopChat: stopServerChat,
-    onSessionReset: resetSessionUi,
-  });
-
-  const intelligence = useSuggestionActions({
-    inputValue,
-    setInputValue,
-    attachedContext,
-    setAttachedContext,
-    conversationContext,
-    hasTranscript: meeting.dialogueTurns.length > 0,
-    setIsExpanded,
-    pendingCaptureRef,
-    pinSuggestionPanel,
-    setScreenContextStatus,
-    setLatestUsedImageInput,
-    setLatestVisionProviderUsed,
-    setLatestVisionModelUsed,
-    setLatestVisionFailureReason,
-    sendWithSystem,
-  });
-
-  const finishMeeting = async (save: boolean) => {
-    if (endingMeetingRef.current) return;
-    endingMeetingRef.current = true;
-    setEndingMeeting(true);
-    setMeetingEndError('');
-    try {
-      if (save) await window.desktopAPI.endMeeting();
-      else await window.desktopAPI.abortMeeting();
-      await window.desktopAPI.modelSelectorCloseIfOpen();
-      await window.desktopAPI.closeSettingsWindow();
-      await window.desktopAPI.setWindowMode('launcher');
-    } catch (error) {
-      setMeetingEndError(String(error));
-    } finally {
-      endingMeetingRef.current = false;
-      setEndingMeeting(false);
-    }
-  };
+  // Hooks (the two callbacks are declared here because the meeting hooks take them as parameters)
+  const { shortcuts, isShortcutPressed } = useShortcuts();
+  const { messages, setMessages, stop: stopServerChat, sendWithSystem, status: chatStatus, error: chatError } =
+    useServerChat();
   const {
     questions,
+    revision: questionRevision,
     dismiss: dismissQuestion,
-    consume: consumeQuestion,
     reset: resetQuestions,
     forceRefresh,
     isScanning,
@@ -296,258 +167,55 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     setPaused: setQuestionsPaused,
   } = useDetectedQuestions();
   resetQuestionsRef.current = resetQuestions;
-  const questionDetectionPaused = analysisPaused || !questionAnalysisEnabled;
 
-  const handleQuestionSelect = useCallback(
-    (q: DetectedQuestion) => {
-      consumeQuestion(q.id);
-      const prefix =
-        q.speaker === 'Them' ? 'Help me answer: ' : 'Follow up on: ';
-      const text = q.prompt?.trim() || prefix + q.text;
-      setIsExpanded(true);
-      pinSuggestionPanel();
-      sendWithSystem(text, '');
-    },
-    [consumeQuestion, sendWithSystem, setIsExpanded, pinSuggestionPanel]
-  );
+  const pinSuggestionPanel = useCallback(() => {
+    answerPanelPinnedRef.current = true;
+    setSuggestionPanelPinned(true);
+  }, []);
 
-  const handleToggleAnalysis = useCallback(() => {
-    setQuestionsPaused(!analysisPaused);
-  }, [analysisPaused, setQuestionsPaused]);
+  const resetSessionUi = useCallback(() => {
+    answerPanelPinnedRef.current = false;
+    setSuggestionPanelPinned(false);
+    setInputValue('');
+    setAttachedContext([]);
+    setVariants({});
+    setSelectedQuestionId(null);
+    setPausedChannels(null);
+    setView('chat');
+    stopServerChat();
+    setMessages([]);
+    resetQuestionsRef.current();
+  }, [setMessages, stopServerChat]);
 
-  const renderMessageText = useMessageRenderer({
-    isLightTheme,
-    handleCopy: intelligence.handleCopy,
+  const meeting = useMeetingState({
+    messages,
+    messagesEndRef,
+    setMessages,
+    setIsExpanded,
+    stopChat: stopServerChat,
+    onSessionReset: resetSessionUi,
   });
-
-  useEffect(() => {
-    let mounted = true;
-    const loadLlmRoute = async () => {
-      const config = await window.desktopAPI
-        .getCurrentLlmConfig()
-        .catch(() => null);
-      if (!mounted || !config) return;
-      setLlmProviderLabel(formatProviderLabel(config.provider));
-      setLlmPrivacyLabel(
-        config.provider === 'custom' ? 'Custom endpoint route' : null
-      );
-    };
-    loadLlmRoute();
-    const unsub = window.desktopAPI.onModelChanged(() => loadLlmRoute());
-    return () => {
-      mounted = false;
-      unsub?.();
-    };
-  }, []);
-
-  useEffect(() => {
-    window.desktopAPI
-      .getDefaultModel()
-      .then((result: any) => {
-        if (result?.model) {
-          setCurrentModel(result.model);
-          window.desktopAPI.setModel(result.model).catch(() => {});
-        }
-      })
-      .catch((err: any) =>
-        console.error('Failed to fetch default model:', err)
-      );
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = window.desktopAPI.onModelChanged((modelId: string) => {
-      setCurrentModel((prev) => (prev === modelId ? prev : modelId));
-    });
-    return () => unsubscribe?.();
-  }, []);
-
-  useEffect(() => {
-    window.desktopAPI.getUndetectable().then(setIsUndetectable);
-    const unsubscribe = window.desktopAPI.onUndetectableChanged((state) =>
-      setIsUndetectable(state)
-    );
-    return () => unsubscribe?.();
-  }, []);
-  useEffect(() => {
-    localStorage.setItem('cheatly_undetectable', String(isUndetectable));
-    localStorage.setItem(
-      'cheatly_hideChatHidesWidget',
-      String(hideChatHidesWidget)
-    );
-  }, [isUndetectable, hideChatHidesWidget]);
-
-  useEffect(() => {
-    const context = messages
-      .filter((m) => m.role !== 'user' || !m.metadata?.hasScreenshot)
-      .map((m) => `${roleLabel(m.role)}: ${getMessageText(m)}`)
-      .slice(-20)
-      .join('\n');
-    setConversationContext(context);
-  }, [messages]);
-
-  useEffect(() => {
-    if (!popup) return;
-    const dismiss = (event: MouseEvent) => {
-      if (
-        !(event.target instanceof Element) ||
-        !event.target.closest('[data-overlay-popup]')
-      )
-        setPopup(null);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPopup(null);
-    };
-    const blur = () => setPopup(null);
-    document.addEventListener('mousedown', dismiss);
-    document.addEventListener('keydown', escape);
-    window.addEventListener('blur', blur);
-    return () => {
-      document.removeEventListener('mousedown', dismiss);
-      document.removeEventListener('keydown', escape);
-      window.removeEventListener('blur', blur);
-    };
-  }, [popup]);
-
-  useEffect(() => {
-    if (!isExpandedEffectInitializedRef.current) {
-      isExpandedEffectInitializedRef.current = true;
-      isStealthRef.current = false;
-      return;
-    }
-    if (isExpanded) {
-      setActiveTab('assistant');
-      window.desktopAPI.showWindow(isStealthRef.current);
-      isStealthRef.current = false;
-      return;
-    }
-    const timer = setTimeout(() => window.desktopAPI.hideWindow(), 400);
-    return () => clearTimeout(timer);
-  }, [isExpanded]);
-
-  useEffect(() => {
-    const unsubscribe = window.desktopAPI.onToggleExpand(() =>
-      setIsExpanded((prev) => !prev)
-    );
-    return () => unsubscribe?.();
-  }, []);
-  useEffect(() => {
-    const unsubscribe = window.desktopAPI.onEnsureExpanded(() => {
-      isStealthRef.current = true;
-      setIsExpanded(true);
-    });
-    return () => unsubscribe?.();
-  }, []);
-
-  const reportShellSize = useCallback(() => {
-    if (!contentRef.current) return;
-    const width = contentRef.current.offsetWidth;
-    const height = contentRef.current.offsetHeight;
-    updateShellDimensions(width, height);
-  }, []);
-
-  const measureVerticalCap = useCallback(() => {
-    const scrollEl = scrollContainerRef.current;
-    const contentEl = contentRef.current;
-    if (!scrollEl || !contentEl) {
-      verticalCap.set(Infinity);
-      return;
-    }
-    const availHeight = window.screen.availHeight;
-    const chromeHeight = contentEl.offsetHeight - scrollEl.clientHeight;
-    verticalCap.set(verticalScrollCap({ availHeight, chromeHeight }));
-  }, [verticalCap]);
-
-  useEffect(() => {
-    let rafId: number | null = null;
-    let lastSentWidth = Math.round(shellWidth.get());
-    const flush = () => {
-      rafId = null;
-      if (!contentRef.current) return;
-      const width = contentRef.current.offsetWidth;
-      if (Math.abs(width - lastSentWidth) < 1) return;
-      lastSentWidth = width;
-      const height = contentRef.current.offsetHeight;
-      updateShellDimensions(width, height);
-    };
-    const unsubscribe = shellWidth.on('change', () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(flush);
-    });
-    return () => {
-      unsubscribe();
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, [shellWidth]);
-
-  useLayoutEffect(() => {
-    if (!contentRef.current) return;
-    const observer = new ResizeObserver(() => {
-      if (rafDimUpdateRef.current)
-        cancelAnimationFrame(rafDimUpdateRef.current);
-      rafDimUpdateRef.current = requestAnimationFrame(() => {
-        rafDimUpdateRef.current = null;
-        measureVerticalCap();
-        reportShellSize();
-      });
-    });
-    observer.observe(contentRef.current);
-    return () => {
-      observer.disconnect();
-      if (rafDimUpdateRef.current)
-        cancelAnimationFrame(rafDimUpdateRef.current);
-      rafDimUpdateRef.current = null;
-    };
-  }, [reportShellSize, measureVerticalCap]);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      measureVerticalCap();
-      reportShellSize();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [
+  const intelligence = useSuggestionActions({
+    inputValue,
+    setInputValue,
     attachedContext,
-    questionsPanelOpen,
-    reportShellSize,
-    measureVerticalCap,
-  ]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      measureVerticalCap();
-      reportShellSize();
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [reportShellSize, measureVerticalCap]);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    let rafId: number | null = null;
-    const onScroll = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        saveAssistantScrollPosition();
-      });
-    };
-    container.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      container.removeEventListener('scroll', onScroll);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, [activeTab, messages, saveAssistantScrollPosition]);
-
-  useEffect(() => {
-    return () => {
-      if (rafDimUpdateRef.current)
-        cancelAnimationFrame(rafDimUpdateRef.current);
-      rafDimUpdateRef.current = null;
-    };
-  }, []);
-
+    setAttachedContext,
+    conversationContext: contextFrom(messages),
+    hasTranscript: meeting.dialogueTurns.length > 0,
+    setIsExpanded,
+    pendingCaptureRef,
+    pinSuggestionPanel,
+    sendWithSystem,
+  });
+  const capturing = pausedChannels === null;
+  const elapsed = useMeetingClock(!capturing);
+  const threadCue = useOverflowCue(scrollContainerRef, spacerRef);
+  // ⌘↵ (global "process screenshots") acts like the send button: typed text, else Help me respond.
+  const keyboardIntelligence = useMemo(
+    () => ({ ...intelligence, handleWhatToSay: () => submitRef.current() }),
+    [intelligence]
+  );
   const isProcessing = chatStatus === 'streaming' || chatStatus === 'submitted';
-
   const blockInputFocus = useOverlayKeyboard({
     isShortcutPressed,
     scrollContainerRef,
@@ -567,11 +235,28 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     setStealthTapActive,
     setStealthPermissionMissing,
     setStealthHotkeyConflict,
-    intelligence,
+    intelligence: keyboardIntelligence,
     currentModel,
-    onToast: setToastMessage,
+    onToast: (text: string) => showToast(text),
   });
 
+  // Derived values
+  const displayMessages = useMemo(
+    () => collapseConsecutiveDuplicateAssistantMessages(messages, getMessageText),
+    [messages]
+  );
+  const turns = useMemo(
+    () => buildTurns(displayMessages, isProcessing, chatError),
+    [displayMessages, isProcessing, chatError]
+  );
+  const listMaxHeight = Math.min(LIST_MAX_HEIGHT, verticalCap);
+  const questionDetectionPaused = analysisPaused || !questionAnalysisEnabled;
+  const userMessageCount = messages.filter((m) => m.role === 'user').length;
+  const newestQuestion = questions[0];
+  const hasTranscript = meeting.dialogueTurns.length > 0;
+  // While capture is paused both channels are muted; the menu shows the settings that resume restores.
+  const micOn = pausedChannels ? !pausedChannels.micMuted : !meeting.micMuted;
+  const callAudioOn = pausedChannels ? !pausedChannels.systemMuted : !meeting.systemMuted;
   const sttSummary = getSttSummary(
     meeting.sttUserStatus,
     meeting.sttInterviewerStatus,
@@ -581,648 +266,541 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
     meeting.sttUserError,
     meeting.sttInterviewerError
   );
-  const showSuggestionPanel =
-    messages.length > 0 || isProcessing || answerPanelPinned;
-
-  useLayoutEffect(() => {
-    if (activeTab !== 'assistant' || !showSuggestionPanel) return;
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const maxScrollTop = Math.max(
-      0,
-      container.scrollHeight - container.clientHeight
-    );
-    container.scrollTop = Math.min(assistantScrollTopRef.current, maxScrollTop);
-  }, [activeTab, showSuggestionPanel]);
-
-  const shouldShowSttSummaryPill =
-    sttSummary.tone === 'error' ||
-    meeting.sttUserStatus === 'reconnecting' ||
-    meeting.sttInterviewerStatus === 'reconnecting';
-  const hasStatusPill = shouldShowSttSummaryPill;
-  const statusPillBaseClass = `flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur-xl ${isLightTheme ? 'bg-white/55 border-black/10' : 'bg-black/20 border-white/10'}`;
-  const expandedMotionInitial = hasRenderedExpandedRef.current
-    ? { opacity: 0, y: 20, scale: 0.95 }
-    : false;
-  const markExpandedRendered = useCallback(() => {
-    hasRenderedExpandedRef.current = true;
-  }, []);
-
-  void meeting.isConnected;
-  void meeting.handleScrollCapture;
-  void llmProviderLabel;
-  void llmPrivacyLabel;
-  void screenContextStatus;
-  void latestUsedImageInput;
-  void latestVisionProviderUsed;
-  void latestVisionModelUsed;
-  void latestVisionFailureReason;
-  void intelligence.clearChat;
-
-  const micNeedsPermission = meeting.systemAudioWarning?.channel === 'mic';
   const systemNeedsPermission =
     meeting.systemAudioWarning?.channel === 'system' ||
     meeting.systemAudioWarning?.kind === 'screen-recording-permission';
 
+  // Effects
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    window.desktopAPI.getDefaultModel().then(({ model }) => {
+      setCurrentModel(model);
+      window.desktopAPI.setModel(model);
+    });
+    return window.desktopAPI.onModelChanged((modelId: string) => setCurrentModel(modelId));
+  }, []);
+
+  useEffect(() => {
+    window.desktopAPI.getUndetectable().then(setIsUndetectable);
+    return window.desktopAPI.onUndetectableChanged((state) => setIsUndetectable(state));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('cheatly_undetectable', String(isUndetectable));
+  }, [isUndetectable]);
+
+  // Screen readers: say when a response is being prepared (design: polite live region).
+  useEffect(() => {
+    if (chatStatus === 'submitted') setAnnouncement('Preparing a response');
+  }, [chatStatus]);
+
+  useEffect(() => {
+    if (chatError) showToast(chatError.message);
+  }, [chatError]);
+
+  // A new request always shows in Chat.
+  useEffect(() => {
+    if (userMessageCount > 0) setView('chat');
+  }, [userMessageCount]);
+
+  // Menus close on outside click, Esc or window blur (each menu and its button carry data-overlay-popup).
+  useEffect(() => {
+    if (!popup) return;
+    const dismiss = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-overlay-popup]')) setPopup(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPopup(null);
+    };
+    const blur = () => setPopup(null);
+    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('keydown', escape);
+    window.addEventListener('blur', blur);
+    return () => {
+      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('keydown', escape);
+      window.removeEventListener('blur', blur);
+    };
+  }, [popup]);
+
+  // Overlay-local shortcuts from the design: ⌘\ hide / show panels, ⌘⇧P pause / resume capture.
+  // Kept local on purpose: system-wide they would take ⌘⇧P from other apps (VS Code's command palette).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const mod = isMac ? event.metaKey : event.ctrlKey;
+      if (!mod) return;
+      if (event.key === '\\' && !event.shiftKey) {
+        event.preventDefault();
+        toggleHideRef.current();
+      }
+      if (event.shiftKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        toggleCaptureRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!isExpandedEffectInitializedRef.current) {
+      isExpandedEffectInitializedRef.current = true;
+      isStealthRef.current = false;
+      return;
+    }
+    if (!isExpanded) return;
+    window.desktopAPI.showWindow(isStealthRef.current);
+    isStealthRef.current = false;
+  }, [isExpanded]);
+
+  useEffect(() => window.desktopAPI.onToggleExpand(() => setIsExpanded((prev) => !prev)), []);
+
+  useEffect(
+    () =>
+      window.desktopAPI.onEnsureExpanded(() => {
+        isStealthRef.current = true;
+        setIsExpanded(true);
+      }),
+    []
+  );
+
+  const reportShellSize = useCallback(() => {
+    if (!contentRef.current) return;
+    const { width, height } = measureOverlay(contentRef.current);
+    updateShellDimensions(width, height);
+  }, []);
+
+  const measureVerticalCap = useCallback(() => {
+    const scrollEl = scrollContainerRef.current;
+    const contentEl = contentRef.current;
+    if (!scrollEl || !contentEl) {
+      setVerticalCap(Infinity);
+      return;
+    }
+    const chromeHeight = contentEl.offsetHeight - scrollEl.clientHeight;
+    setVerticalCap(verticalScrollCap({ availHeight: window.screen.availHeight, chromeHeight }));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    const observer = new ResizeObserver(() => {
+      if (rafDimUpdateRef.current) cancelAnimationFrame(rafDimUpdateRef.current);
+      rafDimUpdateRef.current = requestAnimationFrame(() => {
+        rafDimUpdateRef.current = null;
+        measureVerticalCap();
+        reportShellSize();
+      });
+    });
+    observer.observe(contentRef.current);
+    return () => {
+      observer.disconnect();
+      if (rafDimUpdateRef.current) cancelAnimationFrame(rafDimUpdateRef.current);
+      rafDimUpdateRef.current = null;
+    };
+  }, [reportShellSize, measureVerticalCap]);
+
+  // Menus hang outside the measured box: resize the window whenever one opens or closes.
+  useEffect(() => {
+    const id = requestAnimationFrame(reportShellSize);
+    return () => cancelAnimationFrame(id);
+  }, [popup, isExpanded, confirmDiscard, reportShellSize]);
+
+  useEffect(() => {
+    if (isScanning) setAnnouncement('Scanning');
+  }, [isScanning]);
+
+  // Result of a scan the user started: the first settled snapshot after it. Background scans stay silent.
+  useEffect(() => {
+    const scan = userScanRef.current;
+    if (!scan || isScanning || questionRevision <= scan.revision) return;
+    userScanRef.current = null;
+    if (scanError) return;
+    if (!questions.some((q) => !scan.ids.has(q.id))) showToast(scanResultMessage(scanNotice));
+  }, [questionRevision, isScanning, questions, scanError, scanNotice]);
+
+  useEffect(() => {
+    if (scanError) showToast(scanError);
+  }, [scanError]);
+
+  useEffect(() => {
+    if (newestQuestion) setAnnouncement(`New suggestion: ${promptOf(newestQuestion)}`);
+  }, [newestQuestion]);
+
+  // HTTP / desktop calls
+  const finishMeeting = async (save: boolean) => {
+    if (endingMeetingRef.current) return;
+    endingMeetingRef.current = true;
+    setEndingMeeting(true);
+    setMeetingEndError('');
+    try {
+      if (save) await window.desktopAPI.endMeeting();
+      else await window.desktopAPI.abortMeeting();
+      await window.desktopAPI.modelSelectorCloseIfOpen();
+      await window.desktopAPI.closeSettingsWindow();
+      await window.desktopAPI.setWindowMode('launcher');
+    } catch (error) {
+      setMeetingEndError(String(error));
+    } finally {
+      endingMeetingRef.current = false;
+      setEndingMeeting(false);
+    }
+  };
+
+  const setChannelMuted = (channel: 'mic' | 'system', muted: boolean) => {
+    if (channel === 'mic') meeting.setMicMuted(muted);
+    else meeting.setSystemMuted(muted);
+    window.desktopAPI.setChannelMuted(channel, muted);
+  };
+
+  const setUndetectable = async (on: boolean) => {
+    await window.desktopAPI.setUndetectable(on);
+    setIsUndetectable(on);
+    showToast(on ? 'Undetectable on' : 'Undetectable off');
+  };
+
+  const selectModel = async (id: string) => {
+    await window.desktopAPI.setModel(id);
+    setCurrentModel(id);
+    showToast(`Model: ${prettifyModelId(id)}`);
+  };
+
+  const attachScreenshot = async () => {
+    if (!modelSupportsVision(currentModel)) {
+      showToast('Screenshots require a vision-capable model');
+      return;
+    }
+    intelligence.handleScreenshotAttach(await window.desktopAPI.takeScreenshot());
+    showToast('Screenshot attached');
+  };
+
+  const rewrite = async (id: string, instruction: string, text: string, key: 'short' | 'alt') => {
+    updateVariant(id, { busy: true });
+    try {
+      const result = await rewriteAnswer(instruction, text);
+      updateVariant(id, { [key]: result, showing: key, busy: false });
+    } catch (error) {
+      updateVariant(id, { busy: false });
+      showToast(String(error));
+    }
+  };
+
+  // Event handlers
+  function showToast(text: string) {
+    toastSeqRef.current += 1;
+    setToast({ text, id: toastSeqRef.current });
+  }
+
+  const toggleCapture = () => {
+    if (pausedChannels) {
+      setChannelMuted('mic', pausedChannels.micMuted);
+      setChannelMuted('system', pausedChannels.systemMuted);
+      setPausedChannels(null);
+      showToast('Capture resumed');
+      return;
+    }
+    setPausedChannels({ micMuted: meeting.micMuted, systemMuted: meeting.systemMuted });
+    setChannelMuted('mic', true);
+    setChannelMuted('system', true);
+    showToast('Capture paused');
+  };
+  toggleCaptureRef.current = toggleCapture;
+
+  // While paused, a channel toggle changes what resume restores; otherwise it applies right away.
+  const setChannelOn = (channel: 'mic' | 'system', on: boolean) => {
+    if (!pausedChannels) {
+      setChannelMuted(channel, !on);
+      return;
+    }
+    if (channel === 'mic') setPausedChannels({ ...pausedChannels, micMuted: !on });
+    else setPausedChannels({ ...pausedChannels, systemMuted: !on });
+  };
+
+  const toggleHide = () => {
+    setPopup(null);
+    setIsExpanded((visible) => !visible);
+    if (!isExpanded) return;
+    showToast(capturing ? 'Hidden · still recording' : 'Hidden');
+  };
+  toggleHideRef.current = toggleHide;
+
+  const backToApp = () => {
+    setPopup(null);
+    window.desktopAPI.setWindowMode('launcher');
+  };
+
+  const askDiscard = () => {
+    setPopup(null);
+    setConfirmDiscard(true);
+  };
+
+  const toggleSuggestions = () => {
+    if (!questionAnalysisEnabled) {
+      showToast('Turn on suggestions in Settings');
+      return;
+    }
+    setQuestionsPaused(!analysisPaused);
+    showToast(analysisPaused ? 'Suggestions on' : 'Suggestions paused');
+  };
+
+  const scanNow = () => {
+    userScanRef.current = { revision: questionRevision, ids: new Set(questions.map((q) => q.id)) };
+    forceRefresh();
+  };
+
+  const sendSuggestion = (question: DetectedQuestion) => {
+    if (isProcessing || endingMeeting) return;
+    setSelectedQuestionId(question.id);
+    setIsExpanded(true);
+    pinSuggestionPanel();
+    sendWithSystem(promptOf(question), '');
+  };
+
+  const submit = () => {
+    if (inputValue.trim()) {
+      intelligence.handleManualSubmit();
+      return;
+    }
+    if (!hasTranscript) {
+      showToast('Nothing to respond to yet');
+      return;
+    }
+    intelligence.handleWhatToSay();
+  };
+  submitRef.current = submit;
+
+  const runQuickAction = (action: () => void) => {
+    setPopup(null);
+    if (!hasTranscript) {
+      showToast('Nothing to respond to yet');
+      return;
+    }
+    action();
+  };
+
+  function updateVariant(id: string, patch: Partial<AnswerVariant>) {
+    setVariants((all) => ({ ...all, [id]: { ...(all[id] ?? NO_VARIANT), ...patch } }));
+  }
+
+  const shorter = (id: string, text: string) => {
+    if (variants[id]?.short) updateVariant(id, { showing: 'short' });
+    else rewrite(id, SHORTER_INSTRUCTION, text, 'short');
+  };
+
+  // Another angle swaps between the answer and its alternative (generated once).
+  const anotherAngle = (id: string, text: string) => {
+    const variant = variants[id];
+    if (variant?.showing === 'alt') updateVariant(id, { showing: 'base' });
+    else if (variant?.alt) updateVariant(id, { showing: 'alt' });
+    else rewrite(id, ANGLE_INSTRUCTION, text, 'alt');
+  };
+
+  const copyAnswer = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        analytics.trackCopyAnswer();
+        showToast('Copied');
+      },
+      () => showToast('Clipboard unavailable')
+    );
+  };
+
   const openPermissionPane = (channel: 'mic' | 'system') => {
     if (isMac) {
-      window.desktopAPI.openPermissionSettings(
-        channel === 'mic' ? 'microphone' : 'screen'
-      );
+      window.desktopAPI.openPermissionSettings(channel === 'mic' ? 'microphone' : 'screen');
       return;
     }
     window.desktopAPI.openSettingsTab('audio');
   };
 
-  const channelDotClass = (
-    active: boolean,
-    muted: boolean,
-    needsPermission: boolean
-  ) => {
-    if (needsPermission)
-      return 'bg-amber-400/80 shadow-[0_0_6px_rgba(251,191,36,0.4)]';
-    if (muted) return 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.4)]';
-    if (active) return 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]';
-    return 'bg-zinc-600';
-  };
+  const notices = (
+    <>
+      {meeting.systemAudioWarning && (
+        <p className="quiet" data-stealth-ignore="true">
+          {meeting.systemAudioWarning.message}{' '}
+          <button className="text-btn" onClick={() => openPermissionPane(systemNeedsPermission ? 'system' : 'mic')}>
+            Open settings
+          </button>
+        </p>
+      )}
+      {stealthHotkeyConflict && (
+        <p className="quiet" data-stealth-ignore="true">
+          Hotkey {stealthHotkeyConflict} is busy.{' '}
+          <button className="text-btn" onClick={() => window.desktopAPI.openSettingsTab('keybinds')}>
+            Rebind
+          </button>
+          <button className="text-btn" aria-label="Dismiss" onClick={() => setStealthHotkeyConflict(null)}>
+            ×
+          </button>
+        </p>
+      )}
+      {isMac && stealthPermissionMissing && (
+        <p className="quiet" data-stealth-ignore="true">
+          Stealth typing needs Accessibility access.{' '}
+          <button className="text-btn" onClick={() => window.desktopAPI.stealthTapOpenSettings()}>
+            Enable
+          </button>
+          <button className="text-btn" aria-label="Dismiss" onClick={() => setStealthPermissionMissing(false)}>
+            ×
+          </button>
+        </p>
+      )}
+    </>
+  );
 
-  const renderChannelLabel = (
-    channel: 'mic' | 'system',
-    label: string,
-    muted: boolean,
-    needsPermission: boolean
-  ) =>
-    needsPermission ? (
-      <button
-        onClick={() => openPermissionPane(channel)}
-        title={
-          meeting.systemAudioWarning?.message ??
-          (channel === 'mic'
-            ? 'Open Microphone permissions'
-            : 'Open Screen Recording permissions')
-        }
-        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-500 hover:text-amber-400 transition-colors cursor-pointer no-drag"
-      >
-        {label}
-        <ExternalLink className="w-2.5 h-2.5" />
+  const quickActions = (
+    <div className="qa" data-overlay-popup style={{ left: 3, top: 'calc(100% + 2px)' }}>
+      <button type="button" className="row" onClick={() => runQuickAction(intelligence.handleWhatToSay)}>
+        Help me respond <small>{formatShortcut(shortcuts.processScreenshots)}</small>
       </button>
-    ) : (
-      <span
-        className={cn(
-          'text-[10px] font-bold uppercase tracking-wider transition-colors',
-          muted ? 'text-rose-500/70' : 'text-zinc-500'
-        )}
-      >
-        {label}
+      <button type="button" className="row" onClick={() => runQuickAction(intelligence.handleFollowUpQuestions)}>
+        Suggest a question
+      </button>
+      <button type="button" className="row" onClick={() => runQuickAction(intelligence.handleRecap)}>
+        Recap the call
+      </button>
+    </div>
+  );
+
+  const input = (
+    <>
+      <label htmlFor="lc-question" className="sr">
+        Ask about this conversation
+      </label>
+      <span data-stealth-engage="true" style={{ display: 'contents' }}>
+        <input
+          id="lc-question"
+          ref={textInputRef}
+          data-testid="overlay-chat-input"
+          placeholder="Ask anything"
+          autoComplete="off"
+          value={inputValue}
+          readOnly={stealthTapActive}
+          onChange={(e) => setInputValue(e.target.value)}
+          onMouseDown={blockInputFocus}
+        />
       </span>
-    );
+    </>
+  );
 
   return (
-    <div className="w-fit" style={{ pointerEvents: 'none' }}>
-      <div
-        ref={contentRef}
-        className="flex flex-col items-start w-fit h-fit min-h-0 bg-transparent p-0 rounded-xl font-sans gap-1.5 overlay-text-primary"
-        style={{ pointerEvents: 'auto' }}
+    <div className="lc" ref={contentRef}>
+      <RecordingPill
+        elapsed={elapsed}
+        capturing={capturing}
+        panelsHidden={!isExpanded}
+        ending={endingMeeting}
+        menuOpen={popup === 'session'}
+        onToggleCapture={toggleCapture}
+        onToggleHide={toggleHide}
+        onEnd={() => void finishMeeting(true)}
+        onToggleMenu={() => setPopup((open) => (open === 'session' ? null : 'session'))}
       >
-        {meetingEndError && (
-          <div role="alert" className="w-full px-3 py-2 text-sm text-red-400">
-            {meetingEndError}
-          </div>
+        {popup === 'session' && (
+          <SessionMenu
+            micOn={micOn}
+            callAudioOn={callAudioOn}
+            undetectable={isUndetectable}
+            model={currentModel}
+            onMic={(on) => setChannelOn('mic', on)}
+            onCallAudio={(on) => setChannelOn('system', on)}
+            onUndetectable={setUndetectable}
+            onModel={selectModel}
+            onBackToApp={backToApp}
+            onDiscard={askDiscard}
+            onClose={() => setPopup(null)}
+          />
         )}
-        <AnimatePresence initial={false}>
-          {isExpanded && (
-            <motion.div
-              initial={expandedMotionInitial}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
-              onAnimationComplete={markExpandedRendered}
-              className="flex flex-col items-start gap-1.5 w-full"
-            >
-              <div
-                className="flex justify-center"
-                style={{ width: SHELL_WIDTH_COLLAPSED }}
-              >
-                <TopPill
-                  expanded={isExpanded}
-                  onToggle={() => setIsExpanded(!isExpanded)}
-                  onBackToApp={() =>
-                    window.desktopAPI.setWindowMode('launcher')
-                  }
-                  onAbort={() => void finishMeeting(false)}
-                  onEnd={() => void finishMeeting(true)}
-                  busy={endingMeeting}
-                  appearance={appearance}
-                  onLogoClick={() =>
-                    window.desktopAPI.setWindowMode('launcher')
-                  }
-                />
-              </div>
-              <div
-                className="grid items-stretch gap-2"
-                style={{
-                  gridTemplateColumns: questionsPanelOpen
-                    ? 'auto auto'
-                    : 'auto',
-                }}
-              >
-                <motion.div
-                  ref={shellRef}
-                  className="relative max-w-full overflow-hidden flex flex-col transition-all duration-300"
-                  style={{ width: shellWidth }}
-                >
-                  <Card
-                    data-tauri-drag-region="deep"
-                    className={cn(
-                      'flex flex-col h-full border rounded-xl overflow-hidden shadow-2xl transition-all duration-500 draggable-area',
-                      isLightTheme
-                        ? 'bg-white/95 border-slate-200'
-                        : 'bg-zinc-900/95 border-zinc-800'
-                    )}
-                    style={appearance.shellStyle}
-                  >
-                    {/* Modern Tab Bar */}
-                    <div className="flex items-center justify-between px-3 pt-2 select-none">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center bg-black/5 dark:bg-white/5 p-0.5 rounded-lg border border-black/5 dark:border-white/5 no-drag">
-                          {(
-                            [
-                              ['assistant', 'Assistant'],
-                              ['transcript', 'Transcript'],
-                            ] as const
-                          ).map(([key, label]) => (
-                            <button
-                              key={key}
-                              onClick={() => handleTabChange(key)}
-                              data-testid={`overlay-tab-${key}`}
-                              className={cn(
-                                'flex items-center gap-2 px-3 py-1 rounded-md text-xs font-semibold tracking-tight transition-all duration-300 relative no-drag',
-                                activeTab === key
-                                  ? isLightTheme
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'bg-zinc-800 text-white shadow-lg'
-                                  : isLightTheme
-                                    ? 'text-slate-500 hover:text-slate-700'
-                                    : 'text-zinc-500 hover:text-zinc-300'
-                              )}
-                            >
-                              {label}
-                              {activeTab === key && (
-                                <motion.div
-                                  layoutId="activeTab"
-                                  className="absolute inset-0 rounded-md border border-black/5 dark:border-white/10 pointer-events-none"
-                                  transition={{
-                                    type: 'spring',
-                                    bounce: 0.2,
-                                    duration: 0.6,
-                                  }}
-                                />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                        {activeTab === 'assistant' && (
-                          <button
-                            onClick={() => setFocusMode((p) => !p)}
-                            className={cn(
-                              'w-7 h-7 rounded-lg flex items-center justify-center no-drag',
-                              'border transition-all duration-200',
-                              focusMode
-                                ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
-                                : 'bg-white/5 border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/10'
-                            )}
-                            title={focusMode ? 'Chat view' : 'Focus view'}
-                          >
-                            {focusMode ? (
-                              <LayoutList size={13} />
-                            ) : (
-                              <Sparkles size={13} />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+      </RecordingPill>
 
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                      {activeTab === 'transcript' ? (
-                        <TranscriptPanel
-                          hasStatusPill={hasStatusPill}
-                          shouldShowSttSummaryPill={shouldShowSttSummaryPill}
-                          sttSummary={sttSummary}
-                          sttNotConfigured={meeting.sttNotConfigured}
-                          setSttNotConfigured={meeting.setSttNotConfigured}
-                          showTranscript={meeting.showTranscript}
-                          showDialogue={true}
-                          dialogueTurns={meeting.dialogueTurns}
-                          livePartials={meeting.livePartials}
-                          interviewerChannelStatus={
-                            meeting.interviewerChannelStatus
-                          }
-                          microphoneChannelStatus={
-                            meeting.microphoneChannelStatus
-                          }
-                          scrollMaxH={scrollMaxH}
-                        />
-                      ) : focusMode ? (
-                        <FocusView
-                          messages={messages}
-                          isStreaming={isStreaming}
-                          onSwitchToChat={() => setFocusMode(false)}
-                          scrollMaxH={scrollMaxH}
-                        />
-                      ) : (
-                        <SuggestionPanel
-                          showSuggestionPanel={showSuggestionPanel}
-                          scrollContainerRef={scrollContainerRef}
-                          scrollMaxH={scrollMaxH}
-                          displayMessages={displayMessages}
-                          isLightTheme={isLightTheme}
-                          appearance={appearance}
-                          handleCopy={intelligence.handleCopy}
-                          renderMessageText={renderMessageText}
-                          isProcessing={isProcessing}
-                          isStreaming={isStreaming}
-                          messagesEndRef={messagesEndRef}
-                          onScroll={meeting.handleScrollCapture}
-                        />
-                      )}
-                    </div>
+      {meetingEndError && (
+        <div className="finish" role="alert">
+          <h2>Could not end the session</h2>
+          <p>{meetingEndError}</p>
+          <button onClick={() => setMeetingEndError('')}>Close</button>
+        </div>
+      )}
 
-                    {/* Persistent Footer */}
-                    <div className="border-t border-black/[0.03] dark:border-white/[0.03] bg-black/[0.01] dark:bg-white/[0.01] flex flex-col">
-                      {activeTab === 'assistant' && (
-                        <SuggestionControls
-                          hasTranscript={meeting.dialogueTurns.length > 0}
-                          showTranscript={meeting.showTranscript}
-                          quickActionClass={quickActionClass}
-                          appearance={appearance}
-                          handleWhatToSay={intelligence.handleWhatToSay}
-                          handleClarify={intelligence.handleClarify}
-                          handleRecap={intelligence.handleRecap}
-                          handleFollowUpQuestions={
-                            intelligence.handleFollowUpQuestions
-                          }
-                          attachedContext={attachedContext}
-                          setAttachedContext={setAttachedContext}
-                          isLightTheme={isLightTheme}
-                          stealthHotkeyConflict={stealthHotkeyConflict}
-                          setStealthHotkeyConflict={setStealthHotkeyConflict}
-                          stealthPermissionMissing={stealthPermissionMissing}
-                          setStealthPermissionMissing={
-                            setStealthPermissionMissing
-                          }
-                          isMac={isMac}
-                          textInputRef={textInputRef}
-                          inputValue={inputValue}
-                          setInputValue={setInputValue}
-                          handleManualSubmit={intelligence.handleManualSubmit}
-                          blockInputFocus={blockInputFocus}
-                          stealthTapActive={stealthTapActive}
-                          shortcuts={shortcuts}
-                          currentModel={currentModel}
-                          controlSurfaceClass={controlSurfaceClass}
-                        />
-                      )}
+      {confirmDiscard && !meetingEndError && (
+        <div className="finish">
+          <h2>Discard this session?</h2>
+          <p>Transcript and suggestions will be deleted.</p>
+          <button onClick={() => setConfirmDiscard(false)}>Keep</button>
+          <button className="danger" disabled={endingMeeting} onClick={() => void finishMeeting(false)}>
+            Discard
+          </button>
+        </div>
+      )}
 
-                      {/* Top Footer Row: Model Selector & Settings */}
-                      <div className="flex items-center justify-start gap-2 px-3 py-1.5 border-t border-black/[0.03] dark:border-white/[0.03]">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          data-model-selector-toggle="true"
-                          data-overlay-popup
-                          aria-expanded={popup === 'model'}
-                          onClick={() =>
-                            setPopup(popup === 'model' ? null : 'model')
-                          }
-                          className="h-7 px-2 rounded-md hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-1.5 no-drag"
-                        >
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          <span className="text-[10px] font-bold tracking-tight opacity-70">
-                            {prettifyModelId(currentModel)}
-                          </span>
-                          <ChevronDown size={10} className="opacity-40" />
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          data-overlay-popup
-                          aria-label="Quick settings"
-                          aria-expanded={isSettingsOpen}
-                          onClick={() =>
-                            setPopup(isSettingsOpen ? null : 'settings')
-                          }
-                          className={cn(
-                            'h-7 w-7 rounded-md transition-all duration-300 no-drag',
-                            isSettingsOpen
-                              ? 'bg-black/10 dark:bg-white/10'
-                              : 'hover:bg-black/5 dark:hover:bg-white/5'
-                          )}
-                        >
-                          <SlidersHorizontal className="w-3.5 h-3.5 opacity-60" />
-                        </Button>
-                      </div>
-
-                      {/* Bottom Footer Row: Audio Controls & Q-Detect */}
-                      {(meeting.micCaptureActive ||
-                        meeting.systemCaptureActive ||
-                        !!meeting.systemAudioWarning) && (
-                        <div className="flex items-center justify-between px-3 py-1.5 border-t border-black/[0.03] dark:border-white/[0.03]">
-                          {/* Audio Controls */}
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={cn(
-                                  'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                                  channelDotClass(
-                                    meeting.micCaptureActive,
-                                    meeting.micMuted,
-                                    micNeedsPermission
-                                  )
-                                )}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  const next = !meeting.micMuted;
-                                  meeting.setMicMuted(next);
-                                  window.desktopAPI.setChannelMuted(
-                                    'mic',
-                                    next
-                                  );
-                                }}
-                                className={cn(
-                                  'h-7 w-7 rounded-lg border transition-all duration-300',
-                                  meeting.micMuted
-                                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20'
-                                    : 'bg-black/5 dark:bg-white/5 border-transparent hover:bg-black/10 dark:hover:bg-white/10'
-                                )}
-                                title={
-                                  meeting.micMuted ? 'Resume mic' : 'Pause mic'
-                                }
-                              >
-                                {meeting.micMuted ? (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    className="w-3.5 h-3.5"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <line x1="1" y1="1" x2="23" y2="23" />
-                                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .67-.1 1.32-.27 1.93" />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    className="w-3.5 h-3.5"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                                  </svg>
-                                )}
-                              </Button>
-                            </div>
-
-                            <div className="w-px h-4 bg-black/10 dark:bg-white/10" />
-
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={cn(
-                                  'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                                  channelDotClass(
-                                    meeting.systemCaptureActive,
-                                    meeting.systemMuted,
-                                    systemNeedsPermission
-                                  )
-                                )}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  const next = !meeting.systemMuted;
-                                  meeting.setSystemMuted(next);
-                                  window.desktopAPI.setChannelMuted(
-                                    'system',
-                                    next
-                                  );
-                                }}
-                                className={cn(
-                                  'h-7 w-7 rounded-lg border transition-all duration-300',
-                                  meeting.systemMuted
-                                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20'
-                                    : 'bg-black/5 dark:bg-white/5 border-transparent hover:bg-black/10 dark:hover:bg-white/10'
-                                )}
-                                title={
-                                  meeting.systemMuted
-                                    ? 'Resume system audio'
-                                    : 'Pause system audio'
-                                }
-                              >
-                                {meeting.systemMuted ? (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    className="w-3.5 h-3.5"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                    <line x1="23" y1="9" x2="17" y2="15" />
-                                    <line x1="17" y1="9" x2="23" y2="15" />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    className="w-3.5 h-3.5"
-                                    stroke="currentColor"
-                                    fill="none"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                                  </svg>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Q-Detect Inline */}
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={cn(
-                                'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                                questionDetectionPaused
-                                  ? 'bg-zinc-600'
-                                  : isScanning
-                                    ? 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.4)]'
-                                    : 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]'
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                'text-[10px] font-bold uppercase tracking-wider transition-colors',
-                                questionDetectionPaused
-                                  ? 'text-zinc-500'
-                                  : 'text-zinc-500'
-                              )}
-                            >
-                              {isScanning ? 'Scanning' : 'Q-Detect'}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={handleToggleAnalysis}
-                              className={cn(
-                                'h-7 w-7 rounded-lg border transition-all duration-300',
-                                questionDetectionPaused
-                                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-500 hover:bg-rose-500/20'
-                                  : 'bg-black/5 dark:bg-white/5 border-transparent hover:bg-black/10 dark:hover:bg-white/10'
-                              )}
-                              disabled={!questionAnalysisEnabled}
-                              title={
-                                !questionAnalysisEnabled
-                                  ? 'Enable scanning in settings'
-                                  : analysisPaused
-                                    ? 'Resume scanning'
-                                    : 'Pause scanning'
-                              }
-                            >
-                              {questionDetectionPaused ? (
-                                <Play size={13} />
-                              ) : (
-                                <Pause size={13} />
-                              )}
-                            </Button>
-                            {!questionDetectionPaused && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  if (isScanning) return;
-                                  setQuestionsPanelOpen(true);
-                                  void forceRefresh();
-                                }}
-                                disabled={isScanning}
-                                className={cn(
-                                  'h-7 w-7 rounded-lg border transition-all duration-300',
-                                  isScanning
-                                    ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                    : 'bg-black/5 dark:bg-white/5 border-transparent hover:bg-black/10 dark:hover:bg-white/10'
-                                )}
-                                title="Scan now"
-                              >
-                                {isScanning ? (
-                                  <LoaderCircle
-                                    size={13}
-                                    className="animate-spin"
-                                  />
-                                ) : (
-                                  <ScanSearch size={13} />
-                                )}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setQuestionsPanelOpen((p) => !p)}
-                              className={cn(
-                                'h-7 w-7 rounded-lg border transition-all duration-300 relative',
-                                questionsPanelOpen
-                                  ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
-                                  : 'bg-black/5 dark:bg-white/5 border-transparent hover:bg-black/10 dark:hover:bg-white/10'
-                              )}
-                              title={
-                                questionsPanelOpen
-                                  ? 'Hide questions'
-                                  : 'Show questions'
-                              }
-                            >
-                              {questionsPanelOpen ? (
-                                <PanelRightClose size={13} />
-                              ) : (
-                                <PanelRightOpen size={13} />
-                              )}
-                              {questions.length > 0 && !questionsPanelOpen && (
-                                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
-                                  {questions.length}
-                                </span>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      {(scanError || scanNotice) && (
-                        <p
-                          role={scanError ? 'alert' : 'status'}
-                          className={cn(
-                            'px-3 py-2 text-xs no-drag',
-                            scanError ? 'text-amber-400' : 'text-zinc-400'
-                          )}
-                        >
-                          {scanError || scanNotice}
-                        </p>
-                      )}
-                    </div>
-                  </Card>
-                </motion.div>
-                {questionsPanelOpen && (
-                  <QuestionsPanel
-                    questions={questions}
-                    onSelect={handleQuestionSelect}
-                    onDismiss={dismissQuestion}
-                    paused={questionDetectionPaused}
-                    style={{ maxHeight: scrollMaxH }}
-                  />
-                )}
-              </div>
-              {popup && (
-                <div
-                  data-overlay-popup
-                  className="no-drag"
-                  style={{ marginLeft: popup === 'model' ? 12 : 140 }}
-                >
-                  {popup === 'model' ? (
-                    <ModelSelectorWindow onClose={() => setPopup(null)} />
-                  ) : (
-                    <SettingsPopup embedded />
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-medium shadow-lg"
+      {isExpanded && !confirmDiscard && !meetingEndError && (
+        <div className="panels">
+          <ConversationPanel
+            view={view}
+            onView={setView}
+            scrollRef={scrollContainerRef}
+            maxHeight={listMaxHeight}
+            more={threadCue.more}
+            onScrollToEnd={threadCue.toEnd}
+            busy={isProcessing}
+            attachments={attachedContext}
+            onRemoveAttachment={(path) => setAttachedContext((all) => all.filter((a) => a.path !== path))}
+            notices={notices}
+            input={input}
+            quickActionsOpen={popup === 'actions'}
+            quickActions={quickActions}
+            onToggleQuickActions={() => setPopup((open) => (open === 'actions' ? null : 'actions'))}
+            onAttachScreenshot={attachScreenshot}
+            screenshotTip={`Attach screenshot ${formatShortcut(shortcuts.takeScreenshot)}`}
+            onSubmit={submit}
           >
-            {toastMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {view === 'chat' ? (
+              <ChatThread
+                turns={turns}
+                variants={variants}
+                maxHeight={listMaxHeight}
+                scrollRef={scrollContainerRef}
+                spacerRef={spacerRef}
+                onShorter={shorter}
+                onAngle={anotherAngle}
+                onCopy={copyAnswer}
+              />
+            ) : (
+              <TranscriptView
+                turns={meeting.dialogueTurns}
+                partials={meeting.livePartials}
+                notice={sttNotice(sttSummary)}
+                scrollRef={scrollContainerRef}
+              />
+            )}
+          </ConversationPanel>
+          <SuggestionsPanel
+            questions={questions}
+            hydrated={questionRevision >= 0}
+            on={!questionDetectionPaused}
+            scanning={isScanning}
+            maxHeight={listMaxHeight}
+            selectedId={selectedQuestionId}
+            onToggle={toggleSuggestions}
+            onScan={scanNow}
+            onSend={sendSuggestion}
+            onDismiss={dismissQuestion}
+          />
+        </div>
+      )}
+
+      {toast && (
+        <div key={toast.id} className="toast" role="status">
+          {toast.text}
+        </div>
+      )}
+      <div className="sr" role="status" aria-live="polite">
+        {announcement}
+      </div>
+      <TooltipLayer rootRef={contentRef} />
     </div>
   );
 };

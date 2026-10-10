@@ -14,19 +14,6 @@ interface UseIntelligenceHandlersParams {
   setIsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   pendingCaptureRef: React.MutableRefObject<AttachmentContext | null>;
   pinSuggestionPanel: () => void;
-  setScreenContextStatus: React.Dispatch<
-    React.SetStateAction<'not_available' | 'available' | 'failed'>
-  >;
-  setLatestUsedImageInput: React.Dispatch<React.SetStateAction<boolean>>;
-  setLatestVisionProviderUsed: React.Dispatch<
-    React.SetStateAction<string | undefined>
-  >;
-  setLatestVisionModelUsed: React.Dispatch<
-    React.SetStateAction<string | undefined>
-  >;
-  setLatestVisionFailureReason: React.Dispatch<
-    React.SetStateAction<string | undefined>
-  >;
   sendWithSystem: (
     text: string,
     system: string,
@@ -47,11 +34,6 @@ export const useSuggestionActions = ({
   setIsExpanded,
   pendingCaptureRef,
   pinSuggestionPanel,
-  setScreenContextStatus,
-  setLatestUsedImageInput,
-  setLatestVisionProviderUsed,
-  setLatestVisionModelUsed,
-  setLatestVisionFailureReason,
   sendWithSystem,
 }: UseIntelligenceHandlersParams) => {
   const manualSubmitInFlightRef = useRef(false);
@@ -114,11 +96,6 @@ export const useSuggestionActions = ({
       const dynamicPromptInstruction =
         typeof promptInstruction === 'string' ? promptInstruction : undefined;
       setIsExpanded(true);
-      setScreenContextStatus('not_available');
-      setLatestUsedImageInput(false);
-      setLatestVisionProviderUsed(undefined);
-      setLatestVisionModelUsed(undefined);
-      setLatestVisionFailureReason(undefined);
       const pending = pendingCaptureRef.current;
       let currentAttachments = attachedContext;
       if (pending && !currentAttachments.some((s) => s.path === pending.path)) {
@@ -159,11 +136,6 @@ export const useSuggestionActions = ({
       pinSuggestionPanel,
       setAttachedContext,
       setIsExpanded,
-      setLatestUsedImageInput,
-      setLatestVisionFailureReason,
-      setLatestVisionModelUsed,
-      setLatestVisionProviderUsed,
-      setScreenContextStatus,
       sendWithSystem,
       tryBeginOverlayAction,
     ]

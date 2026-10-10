@@ -16,7 +16,9 @@ export function getMessageText(msg: AppMessage): string {
     .join('');
 }
 
-export function getMessageIntent(msg: AppMessage): string | undefined {
+export type MessageIntent = 'chat' | 'recap' | 'follow_up_questions' | 'clarify';
+
+export function getMessageIntent(msg: AppMessage): MessageIntent | undefined {
   if (msg.role !== 'user') return undefined;
   const text = getMessageText(msg).trim();
   switch (text) {

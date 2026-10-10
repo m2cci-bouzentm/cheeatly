@@ -6,10 +6,8 @@ const source = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('stop and discard await completion before returning to the launcher', () => {
   const overlay = source('../../pages/AssistantOverlay/index.tsx');
-  const handler = overlay.slice(
-    overlay.indexOf('const finishMeeting'),
-    overlay.indexOf('const questionDetectionPaused')
-  );
+  const start = overlay.indexOf('const finishMeeting');
+  const handler = overlay.slice(start, overlay.indexOf('\n  };', start));
   assert.match(handler, /await window\.desktopAPI\.endMeeting\(\)/);
   assert.match(handler, /await window\.desktopAPI\.abortMeeting\(\)/);
   assert.match(
@@ -19,12 +17,11 @@ test('stop and discard await completion before returning to the launcher', () =>
   assert.match(handler, /setMeetingEndError\(String\(error\)\)/);
 });
 
-test('overlay uses built-in Tauri drag regions', () => {
-  const overlay = source('../../pages/AssistantOverlay/index.tsx');
-  const pill = source('../../components/ui/TopPill.tsx');
+test('overlay drags only from the pill grip, with the built-in Tauri drag region', () => {
+  const pill = source('../../pages/AssistantOverlay/live/RecordingPill.tsx');
   const bridge = source('../../lib/desktop/tauriBridge.ts');
-  assert.match(overlay, /data-tauri-drag-region="deep"/);
-  assert.match(pill, /data-tauri-drag-region="deep"/);
+  assert.match(pill, /className="grip"[\s\S]*?data-tauri-drag-region="deep"/);
+  assert.equal(pill.match(/data-tauri-drag-region/g).length, 1, 'only the grip drags');
   assert.doesNotMatch(bridge, /addEventListener\('mousedown'/);
 });
 
@@ -36,10 +33,13 @@ test('question hook subscribes to backend state without owning scheduling', () =
   assert.doesNotMatch(hook, /setInterval|analyzeTranscript/);
 });
 
-test('overlay dropdowns render in the main window without creating native windows', () => {
+test('overlay dropdowns render in the overlay window without creating native windows', () => {
   const overlay = source('../../pages/AssistantOverlay/index.tsx');
-  assert.match(overlay, /<ModelSelectorWindow onClose=/);
-  assert.match(overlay, /<SettingsPopup embedded/);
-  assert.doesNotMatch(overlay, /toggleModelSelector|toggleSettingsWindow/);
+  const menu = source('../../pages/AssistantOverlay/live/SessionMenu.tsx');
+  assert.match(overlay, /<SessionMenu/, 'Session options renders inline, owned by the pill');
+  assert.match(overlay, /className="qa" data-overlay-popup/, 'Quick actions render inline in the composer');
+  assert.match(menu, /data-overlay-popup/);
+  assert.match(menu, /OPENROUTER_MODELS\.map/, 'model choice lives in Session options');
+  assert.doesNotMatch(overlay, /toggleModelSelector|toggleSettingsWindow|ModelSelectorWindow|SettingsPopup/);
   assert.match(overlay, /event.key === 'Escape'/);
 });

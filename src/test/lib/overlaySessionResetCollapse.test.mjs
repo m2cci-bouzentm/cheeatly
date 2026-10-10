@@ -1,7 +1,7 @@
-// Regression test: overlay must collapse shell width on session reset.
+// Regression test: a session reset must start the next meeting from a clean overlay without hiding it.
 //
-// resetSessionUi calls resetShellWidth which does shellWidth.set(SHELL_WIDTH_COLLAPSED).
-// Without this, the previous meeting's expanded width shows on the first frame of the new meeting.
+// resetSessionUi clears the thread (messages, answer variants), returns to the Chat view and resets
+// suggestions. It must not hide the panels: a new meeting has to show its overlay immediately.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,41 +14,21 @@ const source = readFileSync(
   path.resolve(__dirname, '../../pages/AssistantOverlay/index.tsx'),
   'utf8'
 );
+const resetStart = source.indexOf('const resetSessionUi = useCallback');
+const body = source.slice(resetStart, source.indexOf('}, [', resetStart));
 
-test('resetSessionUi calls resetShellWidth to collapse width on session reset', () => {
-  assert.match(
-    source,
-    /const resetShellWidth = useCallback\(\(\) => \{/,
-    'resetShellWidth callback must exist'
-  );
-  assert.match(
-    source,
-    /shellWidth\.set\(\s*SHELL_WIDTH_COLLAPSED\s*\)/,
-    'resetShellWidth must imperatively set shellWidth to SHELL_WIDTH_COLLAPSED'
-  );
-  assert.match(
-    source,
-    /const resetSessionUi = useCallback\(\(\) => \{/,
-    'resetSessionUi callback must exist'
-  );
-  assert.match(
-    source,
-    /resetShellWidth\(\)/,
-    'resetSessionUi must call resetShellWidth()'
-  );
-  assert.match(
-    source,
-    /onSessionReset:\s*resetSessionUi/,
-    'resetSessionUi must be wired as the onSessionReset handler'
-  );
+test('resetSessionUi clears the thread and returns to Chat', () => {
+  assert.ok(resetStart >= 0, 'resetSessionUi callback must exist');
+  assert.match(body, /setMessages\(\[\]\)/, 'must clear the chat thread');
+  assert.match(body, /setVariants\(\{\}\)/, 'must drop Shorter / Another angle variants');
+  assert.match(body, /setView\('chat'\)/, 'must return to the Chat view');
+  assert.match(body, /resetQuestionsRef\.current\(\)/, 'must reset suggestions');
+  assert.match(source, /onSessionReset:\s*resetSessionUi/, 'must be wired as the onSessionReset handler');
 });
 
-test('resetSessionUi does NOT call setIsExpanded(false)', () => {
-  const resetStart = source.indexOf('const resetSessionUi = useCallback');
-  const resetEnd = source.indexOf('}, [resetShellWidth', resetStart);
-  const body = source.slice(resetStart, resetEnd);
+test('resetSessionUi does NOT hide the panels', () => {
   assert.ok(
     !/setIsExpanded\(\s*false\s*\)/.test(body),
-    'resetSessionUi must NOT call setIsExpanded(false) — that hides the overlay'
+    'resetSessionUi must NOT call setIsExpanded(false), that hides the panels'
   );
 });

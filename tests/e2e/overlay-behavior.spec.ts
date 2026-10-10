@@ -115,12 +115,12 @@ async function openOverlay(page: Page, interval = 3600) {
       new CustomEvent('cheatly-window-mode', { detail: 'overlay' })
     );
   }, interval);
-  await expect(page.getByRole('button', { name: 'Stop & Save' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'End and save' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Pause mic', exact: true })
+    page.getByRole('button', { name: 'Pause capture', exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Qwen 3.7 Flash', exact: true })
+    page.getByRole('button', { name: 'More session options' })
   ).toBeVisible();
   await page.evaluate(() => {
     (window as any).behavior.calls = [];
@@ -131,17 +131,14 @@ async function scans(page: Page) {
   return page.evaluate(() => (window as any).behavior.scans);
 }
 
-test('selectors stay embedded, select a model, and dismiss on Escape/outside click', async ({
+test('Session options stays embedded in the pill, selects a model, and dismisses on Escape/outside click', async ({
   page,
   context,
 }) => {
   await openOverlay(page);
-  const model = page.getByRole('button', { name: 'Qwen 3.7 Flash', exact: true });
-  await model.click();
-  await page.getByRole('button', { name: 'GLM 4.7', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'GLM 4.7', exact: true })
-  ).toHaveAttribute('aria-expanded', 'false');
+  const more = page.getByRole('button', { name: 'More session options' });
+  await more.click();
+  await page.getByLabel('Model').selectOption('z-ai/glm-4.7');
   await expect
     .poll(() =>
       page.evaluate(
@@ -152,17 +149,15 @@ test('selectors stay embedded, select a model, and dismiss on Escape/outside cli
       )
     )
     .toBe(1);
-  await page.getByRole('button', { name: 'GLM 4.7', exact: true }).click();
   await page.keyboard.press('Escape');
-  await expect(
-    page.getByRole('button', { name: 'GLM 4.7', exact: true })
-  ).toHaveAttribute('aria-expanded', 'false');
-  const settings = page.getByRole('button', { name: 'Quick settings' });
-  await settings.click();
-  await page.getByRole('switch').first().click();
-  await expect(page.getByText('Undetectable', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Transcript', exact: true }).click();
-  await expect(settings).toHaveAttribute('aria-expanded', 'false');
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await more.click();
+  await page
+    .locator('.session-menu label', { hasText: 'Undetectable' })
+    .click();
+  await expect(page.getByText('Undetectable on', { exact: true })).toBeVisible();
+  await page.getByRole('heading', { name: 'Suggestions' }).click();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
   expect(context.pages()).toHaveLength(1);
   const calls = await page.evaluate(() => (window as any).behavior.calls);
   expect(calls).toContainEqual(['setUndetectable', true]);
@@ -173,8 +168,36 @@ test('selectors stay embedded, select a model, and dismiss on Escape/outside cli
   ).toBe(false);
 });
 
+// End & save needs two clicks (arm, confirm); Discard goes through Session options and a confirm card.
+async function startFinish(page: Page, label: string) {
+  // Programmatic clicks (no mousedown) keep the call log to the meeting commands themselves.
+  const click = (name: string) =>
+    page
+      .getByRole('button', { name, exact: true })
+      .evaluate((node: HTMLButtonElement) => node.click());
+  if (label === 'End and save') {
+    await click('End and save');
+    await expect(page.getByText('End & save', { exact: true })).toBeVisible();
+    await page
+      .getByRole('button', { name: 'End and save' })
+      .evaluate((node: HTMLButtonElement) => {
+        node.click();
+        node.click();
+      });
+    return;
+  }
+  await click('More session options');
+  await click('Discard this session…');
+  await page
+    .getByRole('button', { name: 'Discard', exact: true })
+    .evaluate((node: HTMLButtonElement) => {
+      node.click();
+      node.click();
+    });
+}
+
 for (const [label, command] of [
-  ['Stop & Save', 'endMeeting'],
+  ['End and save', 'endMeeting'],
   ['Discard', 'abortMeeting'],
 ]) {
   test(`${label} waits for completion, prevents duplicate requests, then returns to launcher`, async ({
@@ -190,16 +213,9 @@ for (const [label, command] of [
         });
       };
     }, command);
-    const button = page.getByRole('button', { name: label, exact: true });
-    await button.evaluate((node: HTMLButtonElement) => {
-      node.click();
-      node.click();
-    });
+    await startFinish(page, label);
     await expect(
       page.getByRole('button', { name: 'Stopping…' })
-    ).toBeDisabled();
-    await expect(
-      page.getByRole('button', { name: 'Discard', exact: true })
     ).toBeDisabled();
     expect(await page.evaluate(() => (window as any).behavior.calls)).toEqual([
       [command],
@@ -234,12 +250,12 @@ for (const [label, command] of [
         return { success: true };
       };
     }, command);
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await startFinish(page, label);
     await expect(
       page.getByText('Error: Controlled stop failure', { exact: true })
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: label, exact: true })
+      page.getByRole('button', { name: 'End and save' })
     ).toBeEnabled();
     const calls = await page.evaluate(() => (window as any).behavior.calls);
     expect(calls.filter((call: string[]) => call[0] === command)).toEqual([
@@ -248,7 +264,10 @@ for (const [label, command] of [
     expect(calls.some((call: string[]) => call[0] === 'setWindowMode')).toBe(
       false
     );
-    await page.getByRole('button', { name: label, exact: true }).click();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    if (label === 'Discard')
+      await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    else await startFinish(page, label);
     await expect(
       page.getByRole('button', { name: 'Logo Start Cheatly' })
     ).toBeVisible();
@@ -302,12 +321,13 @@ test('scan errors and subsequent suggestions are rendered from backend state', a
       'Add an OpenRouter API key in Settings → AI Providers to detect questions.'
     )
   ).toBeVisible();
+  // A scan that finds something highlights the new card instead of showing a message (design).
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
+  await expect(page.locator('.cue.fresh')).toHaveCount(1);
   await expect(
-    page.getByText('Scan complete. 1 new suggestions.')
-  ).toBeVisible();
-  await expect(
-    page.getByText('How do we prevent duplicate payments?', { exact: true })
+    page.locator('.cue-open', {
+      hasText: 'How do we prevent duplicate payments?',
+    })
   ).toHaveCount(1);
   expect(await scans(page)).toHaveLength(2);
 });
@@ -322,9 +342,10 @@ test('backend pending state disables scan and pause invokes backend command', as
   await expect(
     page.getByRole('button', { name: 'Scan now', exact: true })
   ).toBeDisabled();
-  await page.getByRole('button', { name: 'Pause scanning' }).click();
-  await expect(page.getByText('Analysis paused')).toBeVisible();
-  await page.getByRole('button', { name: 'Resume scanning' }).click();
+  const suggestions = page.getByRole('switch', { name: 'Automatic suggestions' });
+  await suggestions.click();
+  await expect(page.getByText('Suggestions paused', { exact: true })).toBeVisible();
+  await suggestions.click();
   await expect(
     page.getByRole('button', { name: 'Scan now', exact: true })
   ).toBeEnabled();
@@ -364,7 +385,7 @@ test('overlay remount hydrates backend suggestions and ignores older revisions',
     });
   });
   await expect(
-    page.getByText('Retained question?', { exact: true })
+    page.locator('.cue-open', { hasText: 'Retained question?' })
   ).toBeVisible();
   await page.evaluate(() =>
     (window as any).desktopAPI.setWindowMode('launcher')
@@ -376,7 +397,7 @@ test('overlay remount hydrates backend suggestions and ignores older revisions',
     (window as any).desktopAPI.setWindowMode('overlay')
   );
   await expect(
-    page.getByText('Retained question?', { exact: true })
+    page.locator('.cue-open', { hasText: 'Retained question?' })
   ).toBeVisible();
   expect(await scans(page)).toEqual([]);
 });

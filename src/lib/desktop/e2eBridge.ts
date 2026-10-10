@@ -26,6 +26,7 @@ export const e2eDesktopAPI = new Proxy(
     }),
     getRecentMeetings: async () => [],
     getMeetingActive: async () => false,
+    getMeetingStartedAt: async () => null,
     getStoredCredentials: async () => ({
       hasOpenRouterKey: false,
       sttProvider: 'none',

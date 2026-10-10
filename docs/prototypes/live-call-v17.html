@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cheatly · Live call final (v17)</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e9e9ed;background:#eeefed;font-synthesis:none;--muted:#a6a6ad;--green:#81d5b2;--line:#ffffff12;--panel:#242427}*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:default;opacity:.45}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--green);outline-offset:3px}button{color:inherit;border:0;background:none}button,summary{touch-action:manipulation}a{color:inherit}.workbench{padding:22px 30px 18px;color:#303438;display:flex;justify-content:space-between;gap:20px;align-items:center}.brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:17px}.brand svg{width:24px;height:24px}.tag{font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid #cbd0cd;border-radius:5px;padding:5px 7px;color:#626b65;font-weight:600}.intro{font-size:12px;color:#646b67;margin:8px 0 0}.work-actions{display:flex;align-items:center;gap:8px}.work-actions button,.work-actions select{border:1px solid #cbd0cd;border-radius:8px;background:#f8f9f7;color:#3c443e;padding:9px 12px;font-size:12px}.work-actions button.primary{background:#273c31;color:#f0f6f2;border-color:#273c31}.stage{height:650px;min-height:590px;margin:0 20px;position:relative;overflow:hidden;border-radius:16px;background:#141c20;isolation:isolate}.room{position:absolute;inset:0;padding:25px 30px 20px;background:#1b2022}.room-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#a9b6b7}.room-head strong{color:#d7dedc;font-weight:500}.room-badge{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#a5b6ab}.tiles{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px auto 0;max-width:1060px;height:445px}.person{position:relative;overflow:hidden;background:#26302f;border-radius:12px;display:flex;align-items:center;justify-content:center}.person:nth-child(2){background:#333036}.avatar{width:120px;height:120px;display:grid;place-items:center;border-radius:50%;background:#44594e;color:#c9d6ce;font-size:37px;font-weight:400;letter-spacing:-2px}.person:nth-child(2) .avatar{background:#584c58;color:#d9ccd8}.person-name{position:absolute;bottom:14px;left:15px;background:#111b;padding:6px 9px;border-radius:5px;font-size:11px}.call-controls{position:absolute;bottom:21px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center}.call-controls span{background:#303a3b;width:37px;height:37px;border-radius:50%;display:grid;place-items:center;color:#b9c2c0;font-size:15px}.call-controls span:last-child{background:#643938;width:66px;border-radius:20px}.room-caption{position:absolute;bottom:71px;left:50%;transform:translateX(-50%);background:#0d1111bb;padding:8px 15px;border-radius:6px;font-size:12px;color:#dce4e0;max-width:85%;text-align:center}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.notes{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:14px 30px;color:#626966}
+.notes span a{margin-left:12px}
+svg.i{width:15px;height:15px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Overlay */
+.overlay{position:absolute;width:712px;max-width:calc(100% - 30px);left:50%;top:62px;transform:translateX(-50%);z-index:2}
+.pill{width:max-content;display:flex;align-items:center;gap:2px;background:#252528f5;border:1px solid #ffffff17;border-radius:99px;padding:4px;margin-bottom:8px;box-shadow:0 5px 14px #0003;font-size:12px}
+.grip{touch-action:none;cursor:grab;padding:6px 2px 6px 8px;color:#7d7d86;display:grid;user-select:none}
+.grip svg{width:12px;height:14px}
+.grip:active{cursor:grabbing}
+.pill-logo{width:18px;height:18px;color:#a9a9b0;margin:0 4px}
+.timer{display:flex;align-items:center;gap:7px;padding:0 10px 0 6px;font-variant-numeric:tabular-nums;color:#d9d9de}
+.dot{width:7px;height:7px;border-radius:50%;background:#ef6b6b}
+.dot.paused{background:#d8b776;animation:none}
+.sep{width:1px;height:16px;background:#ffffff18;margin:0 4px}
+.ib{width:30px;height:30px;border-radius:99px;display:grid;place-items:center;color:#c4c4cb}
+.ib:hover,.ib[aria-expanded=true]{background:#ffffff10;color:#fff}
+.ib.stop{margin-left:6px}
+.ib.stop.confirm{width:auto;padding:0 11px;background:#673b40;color:#ffdbdc;font-size:12px;gap:6px;display:flex;align-items:center}
+.ib.on{color:var(--green)}
+
+/* Tooltips: name + shortcut, only on hover/focus */
+/* One floating tooltip at body level: panels with overflow can no longer clip it */
+#tip{position:fixed;white-space:nowrap;background:#111214;color:#e4e4e8;border:1px solid #ffffff14;font-size:11px;padding:5px 8px;border-radius:6px;pointer-events:none;z-index:30;animation:tip .12s both}
+
+.panels{display:grid;grid-template-columns:minmax(0,444px) 260px;gap:8px;align-items:start}
+.panels.solo{grid-template-columns:minmax(0,444px)}
+.panel{background:#242427;border:1px solid #ffffff13;box-shadow:0 8px 20px #0003;border-radius:14px}
+.main{display:flex;flex-direction:column;position:relative}
+/* v1 KEEP: view selector, rules copied verbatim from live-call.html */
+.main-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 10px;gap:6px}
+.main-header{padding:10px 16px 7px}
+.view-select{font:inherit;font-size:12px;color:#d4d4da;background:#242427;border:0;padding:5px 4px;max-width:140px}
+/* Prototype-only stand-ins (not part of the design): main app window and the hidden-overlay restore chip */
+.standin{position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:4;background:#f4f5f3;color:#2c3230;border-radius:12px;padding:16px 18px;font-size:13px;box-shadow:0 10px 40px #0008;text-align:center}
+.standin b{display:block;margin-bottom:4px}
+.standin button{margin-top:10px;border:1px solid #cbd0cd;border-radius:8px;background:#fff;padding:7px 12px;font-size:12px;color:#2c3230}
+.body{padding:8px 18px 6px;max-height:380px;overflow:auto;position:relative}
+/* One thread, Cluely style: request bubble on the right, answer under it, newest scrolled to the top */
+.chat-turn+.chat-turn{margin-top:18px}
+.ub{width:fit-content;max-width:80%;margin:0 0 10px auto;background:#34343a;color:#ededf1;font-size:13px;line-height:1.45;padding:7px 11px;border-radius:12px 12px 3px 12px}
+/* Overflow cue copied from Cluely: content fades out at the bottom and a round ↓ jumps to the end */
+.scrollwrap{position:relative}
+#cues{max-height:380px;overflow:auto}
+.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 44px),transparent);mask-image:linear-gradient(#000 calc(100% - 44px),transparent)}
+.down{position:absolute;right:12px;bottom:8px;width:28px;height:28px;border-radius:50%;background:#2f2f33;box-shadow:0 0 0 1px #ffffff1f,0 4px 10px #0006;display:grid;place-items:center;color:#d4d4da;padding:0}
+.down:hover{color:#fff;background:#3a3a3f}
+/* Scrollbars like Cluely: thin, rounded, translucent thumb, no track */
+#body,#cues{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent}
+#body::-webkit-scrollbar,#cues::-webkit-scrollbar{width:6px}
+#body::-webkit-scrollbar-thumb,#cues::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:99px}
+#body::-webkit-scrollbar-track,#cues::-webkit-scrollbar-track{background:transparent}
+.down svg.i{width:14px;height:14px}
+.answer{font-size:15px;font-weight:400;line-height:1.6;color:#f1f1f4;margin:0;text-wrap:pretty;transition:opacity .3s}
+.stale .answer{opacity:.5}
+.tools{display:flex;gap:2px;margin:8px -7px 0;opacity:.75;transition:opacity .15s}
+.main:hover .tools,.tools:focus-within{opacity:1}
+.tools .ib{width:28px;height:28px;border-radius:7px}
+.listening{display:flex;align-items:center;gap:9px;color:#8f9097;font-size:12px;padding:6px 0 10px}
+.bars{display:flex;gap:3px;align-items:center;height:14px}
+.bars i{width:3px;height:100%;border-radius:2px;background:#6f7d76;animation:bar 1.1s ease-in-out infinite}
+.bars i:nth-child(2){animation-delay:.15s}.bars i:nth-child(3){animation-delay:.3s}
+.skel{height:11px;border-radius:5px;background:linear-gradient(90deg,#ffffff0a,#ffffff16,#ffffff0a);background-size:200% 100%;animation:shine 1s linear infinite;margin:6px 0 12px}
+.skel+.skel{width:62%}
+/* v1 KEEP elements, rules copied verbatim from live-call.html (base rule, then its v1 overrides) */
+.foot{border-top:1px solid var(--line);padding:11px 13px 9px;background:#ffffff02}
+.foot{background:none;padding:10px 14px 14px}
+.side-head{padding:15px 15px 11px;display:flex;align-items:center;justify-content:space-between}
+.side-head h2{font-size:12px;font-weight:600;margin:0}
+.side-head{padding:13px 16px 8px}
+.suggestions-switch{display:flex;align-items:center;gap:5px;font-size:11px;color:#b7bbc0}
+/* Scan now: sits left of the v1 On switch; 20px tall so the kept v1 header keeps its height */
+.side-tools{display:flex;align-items:center;gap:8px}
+.side-tools .ib{width:20px;height:20px;border-radius:5px;padding:0}
+.side-tools .ib svg.i{width:13px;height:13px}
+.ib.scanning{color:#9cc6f1}
+.ib.scanning svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* v1 KEEP: ··· button (v1 .pill button rules, scoped to #more so the kept v2 pill buttons stay as they are) */
+.pill #more{border-radius:20px;padding:8px 10px;font-size:11px}
+.pill #more:hover{background:#ffffff0c}
+/* v1 KEEP: Session options dropdown, rules copied verbatim from live-call.html */
+.popover{position:absolute;right:12px;top:48px;width:264px;background:#303034;border:1px solid #ffffff1e;border-radius:12px;box-shadow:0 12px 30px #0007;padding:15px;z-index:10;font-size:12px}
+.popover h3{font-size:12px;margin:0 0 13px}
+.popover label{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:13px 0;font-size:11px;color:#d0d2d7}
+.popover select{width:100%;padding:7px;background:#252529;border:1px solid #ffffff20;color:#dadde0;border-radius:6px;font-size:11px}
+.popover input{accent-color:#85d8b4}
+.popover p{font-size:10px;color:#b4b7bd;line-height:1.5;margin:12px 0 0}
+.popover .close{float:right;color:#c4c7c7;font-size:16px}
+.popover{max-height:calc(100% - 60px);overflow:auto}
+.text-btn{font-size:11px;padding:6px 8px;border-radius:6px;color:#b7bbc0}
+.text-btn:hover{background:#ffffff09;color:#f6f6f8}
+.text-btn.on{color:var(--green);background:#81d5b210}
+/* v1 KEEP: suggestion categories, rules copied verbatim from live-call.html */
+.cue-label{display:flex;justify-content:space-between;align-items:center;font-size:9px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;font-weight:650;color:#dfbd87}
+.cue-label.ask{color:#9dbbdf}
+.cue-label.remember{color:#b4a4ce}
+.cue-label small{font-size:9px;text-transform:none;letter-spacing:0;color:#979da0;font-weight:400}
+.cue-label{color:#b3b7bb;font-size:10px;letter-spacing:.04em}
+/* Context fixes so the v1 elements render exactly as in v1: v1 cards had normal line-height, and v1's
+   320px answer panel never clipped the menu (v4's panel is shorter, so its max-height would). */
+.cue-open .cue-label{line-height:normal}
+#session.popover{max-height:none} /* v1 capped it to its old 320px panel; in the pill every row must show */
+/* Session options belongs to the pill: anchored under its ··· button, right edges aligned */
+.pill{position:relative}
+#session.popover{top:calc(100% + 9px);right:-1px}
+/* Session actions read as buttons: full width, bordered, icon + label; Discard tinted red */
+.menu-btns{display:grid;gap:6px;margin-top:14px;padding-top:12px;border-top:1px solid #ffffff14}
+.menu-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:8px;background:#ffffff0d;border:1px solid #ffffff1a;color:#e4e4e8;font-size:12px;text-align:left}
+.menu-btn:hover{background:#ffffff17;color:#fff}
+.menu-btn svg.i{width:14px;height:14px}
+.menu-btn.danger{background:#673b4026;border-color:#eda7a933;color:#eda7a9}
+.menu-btn.danger:hover{background:#673b404d;color:#ffd0d2} /* +1px: offsets are measured inside the pill's 1px border */
+/* v2 composer sits inside the v1 .foot, so it drops its own outer margin */
+.foot .compose{margin:0}
+.turn{font-size:13px;line-height:1.5;margin:0 0 10px;color:#d6d6db}
+.turn b{display:block;font-size:11px;font-weight:500;color:#8e9097}
+.turn.me b{color:#86b9a1}
+.hist{display:block;width:100%;text-align:left;font-size:13px;line-height:1.5;color:#cfd0d5;padding:8px 10px;margin:0 -10px;border-radius:8px}
+.hist:hover{background:#ffffff08;color:#fff}
+.quiet{font-size:12px;color:#8e9097;padding:4px 0 12px}
+
+/* Screenshot attachments: thumbnails above the input, also shown inside the sent bubble */
+.attachments{display:flex;gap:6px;flex-wrap:wrap;margin:0 10px 6px}
+.thumb{position:relative;width:52px;height:34px;border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px #ffffff26;flex:none}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .rm{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:#000a;color:#fff;display:grid;place-items:center;padding:0;opacity:0}
+.thumb:hover .rm,.thumb:focus-within .rm{opacity:1}
+.thumb .rm svg.i{width:10px;height:10px;stroke-width:2.4}
+.ub .shots{display:flex;gap:5px;justify-content:flex-end;margin-bottom:6px}
+.ub .shots img{width:64px;height:40px;border-radius:5px;object-fit:cover;box-shadow:0 0 0 1px #ffffff26;display:block}
+.compose{display:flex;align-items:center;gap:2px;margin:6px 10px 10px;background:#ffffff06;border:1px solid #ffffff0d;border-radius:10px;padding:3px}
+.compose input{min-width:0;flex:1;border:0;background:none;color:#ededf1;font-size:13px;padding:7px 6px;outline:none}
+.compose input::placeholder{color:#85858f}
+.compose:focus-within{border-color:#81d5b244}
+.compose .ib{width:28px;height:28px;border-radius:7px}
+.send{color:#b6d9c7}
+
+/* Suggestions: one line each, kind as a glyph, done on hover */
+.side{overflow:hidden}
+.cue{position:relative}
+.cue+.cue{border-top:1px solid #ffffff0d}
+.cue-open{display:block;width:100%;text-align:left;padding:12px 38px 12px 14px;font-size:14px;line-height:1.45;color:#dcdce1}
+button.cue-open:hover,.cue.selected .cue-open{background:#ffffff09;color:#fff}
+.k-remember .cue-open{color:#c9c2b2;box-shadow:inset 2px 0 #d8b77699}
+.cue-dismiss{position:absolute;right:6px;top:8px;opacity:0}
+.cue:hover .cue-dismiss,.cue:focus-within .cue-dismiss{opacity:1}
+.cue.fresh{animation:fresh 1.2s ease-out 2}
+
+/* Popovers */
+.qa{position:absolute;z-index:10;width:236px;background:#2c2c30;border:1px solid #ffffff1c;border-radius:12px;box-shadow:0 12px 30px #0007;padding:6px;font-size:12px}
+.qa hr{border:0;border-top:1px solid #ffffff12;margin:5px 0}
+.ctx{padding:7px 8px 6px;line-height:1.45}
+.ctx strong{display:block;font-weight:550;color:#e8e8ec}
+.ctx span{color:#9a9ca3}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;padding:7px 8px;border-radius:7px;color:#d4d5da}
+button.row:hover,label.row:hover{background:#ffffff0a;color:#fff}
+.row small{color:#8e9097}
+.row.danger{color:#eda7a9}
+.row select{background:none;border:0;color:#a9abb2;font-size:12px;text-align:right}
+.sw{appearance:none;width:26px;height:15px;border-radius:99px;background:#ffffff1f;position:relative;cursor:pointer;margin:0;flex:none;transition:background .15s}
+.sw::after{content:"";position:absolute;width:11px;height:11px;border-radius:50%;background:#d9d9de;top:2px;left:2px;transition:left .15s}
+.sw:checked{background:#5fa886}
+.sw:checked::after{left:13px}
+
+.toast{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:20;background:#2c2c30;color:#e5e5ea;padding:8px 13px;border:1px solid #ffffff1c;border-radius:8px;font-size:12px;box-shadow:0 5px 22px #0005;pointer-events:none;animation:tip .15s both}
+.finish{background:#28282cf7;border:1px solid #ffffff15;border-radius:16px;width:340px;max-width:100%;margin:0 auto;padding:20px;box-shadow:0 15px 50px #0006;font-size:13px}
+.finish h2{font-size:16px;font-weight:550;margin:0 0 6px}
+.finish p{color:#a9abb2;margin:0 0 14px;line-height:1.5}
+.finish button{border-radius:8px;background:#ffffff10;padding:8px 12px;font-size:12px;margin-right:6px}
+.finish .danger{background:#673b40;color:#ffdbdc}
+
+@keyframes pulse{50%{opacity:.35}}
+@keyframes bar{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes shine{to{background-position:-200% 0}}
+@keyframes tip{from{opacity:0}to{opacity:1}}
+@keyframes fresh{0%{background:#81d5b230}100%{background:transparent}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media(max-width:760px){.panels{grid-template-columns:1fr}.workbench{display:block}.work-actions{margin-top:12px;flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<header class="workbench"><div><div class="brand"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6a8 8 0 1 0 0 12M17 8a5.5 5.5 0 1 0 0 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>Cheatly <span class="tag">Prototype v17 · final</span></div><p class="intro">Hover the icons for names and shortcuts · all interactions are simulated.</p></div><div class="work-actions"><label class="sr" for="scenario">Call scenario</label><select id="scenario"><option value="sales">Sales · pricing objection</option><option value="competitor">Sales · competitor comparison</option><option value="interview">Interview · panel discussion</option><option value="quiet">Quiet call · no useful cue</option><option value="long">Long content · stress test</option></select><button id="advance" class="primary">Next moment →</button><button id="reset">Reset</button></div></header>
+<main class="stage" id="stage" aria-label="Simulated meeting desktop">
+<div class="room" aria-hidden="true"><div class="room-head"><strong id="room-title"></strong><span class="room-badge">Fictional call</span></div><div class="tiles"><div class="person"><div class="avatar">JL</div><span class="person-name" id="person-one"></span></div><div class="person"><div class="avatar">AS</div><span class="person-name" id="person-two"></span></div></div><div class="room-caption" id="caption"></div><div class="call-controls"><span>♩</span><span>▣</span><span>···</span><span>⌁</span></div></div>
+<div class="overlay" id="overlay">
+<div class="pill" id="pill">
+<span class="grip" id="grip" role="img" aria-label="Drag to move" data-tip="Drag to move"><svg viewBox="0 0 12 14" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="9" cy="3" r="1.3"/><circle cx="3" cy="7" r="1.3"/><circle cx="9" cy="7" r="1.3"/><circle cx="3" cy="11" r="1.3"/><circle cx="9" cy="11" r="1.3"/></svg></span>
+<svg class="pill-logo" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6a8 8 0 1 0 0 12M17 8a5.5 5.5 0 1 0 0 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+<span class="timer" id="timer-wrap"><i class="dot live" id="record-dot"></i><span id="timer">12:08</span></span>
+<span class="sep"></span>
+<button class="ib" id="capture"></button>
+<button class="ib" id="hide"></button>
+<button class="ib stop" id="end" data-tip="End & save" aria-label="End and save"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" stroke="none"/></svg></button>
+<button id="more" aria-label="More session options" aria-expanded="false" data-tip="Session options">···</button>
+<div id="session" class="popover" hidden></div>
+</div>
+<div class="panels" id="panels">
+<section class="panel main" aria-label="Assistant">
+<div class="main-header"><label class="sr" for="view">Conversation view</label><select id="view" class="view-select"><option value="chat">Chat</option><option value="transcript">Transcript</option></select></div>
+<div class="scrollwrap"><div class="body" id="body" role="region" aria-label="Assistant content"></div><button class="down" id="body-down" data-tip="More below" aria-label="Scroll answer to the end" hidden></button></div>
+<div class="foot">
+<div class="attachments" id="attachments" hidden></div>
+<form class="compose" id="composer">
+<button type="button" class="ib" id="actions" data-tip="Quick actions" aria-label="Quick actions" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg></button>
+<button type="button" class="ib" id="shot" data-tip="Attach screenshot ⌘H" aria-label="Attach screenshot"><svg class="i" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
+<label for="question" class="sr">Ask about this conversation</label>
+<input id="question" placeholder="Ask anything" autocomplete="off">
+<button type="submit" class="ib send" id="send" data-tip="Send ↵" aria-label="Send question"></button>
+</form>
+</div>
+</section>
+<aside class="panel side" id="side" aria-label="Live suggestions"><div class="side-head"><h2>Suggestions</h2><div class="side-tools"><button class="ib" id="scan" data-tip="Scan now" aria-label="Scan now"></button><label class="suggestions-switch"><input type="checkbox" class="sw" role="switch" aria-label="Automatic suggestions" id="auto" checked></label></div></div><div class="scrollwrap"><div id="cues"></div><button class="down" id="cues-down" data-tip="More below" aria-label="Scroll suggestions to the end" hidden></button></div></aside>
+</div>
+<div id="popover" class="qa" hidden></div>
+<div id="finish" class="finish" hidden></div>
+</div>
+<div class="standin" id="appwin" hidden><b>Cheatly app window</b>(prototype stand-in) Recording continues in the background.<br><button data-return>Return to the overlay</button></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="sr" id="announcer" role="status" aria-live="polite"></div>
+</main>
+<div id="tip" role="tooltip" hidden></div>
+<footer class="notes"><span>Mock call · no audio captured.</span><span>Compare: <a href="live-call.html">v1</a><a href="live-call-v2.html">v2</a><a href="live-call-v3.html">v3</a><a href="live-call-v4.html">v4</a><a href="live-call-v5.html">v5</a><a href="live-call-v6.html">v6</a><a href="live-call-v7.html">v7</a><a href="live-call-v8.html">v8</a><a href="live-call-v9.html">v9</a><a href="live-call-v10.html">v10</a><a href="live-call-v11.html">v11</a><a href="live-call-v12.html">v12</a><a href="live-call-v13.html">v13</a><a href="live-call-v14.html">v14</a><a href="live-call-v15.html">v15</a><a href="live-call-v16.html">v16</a></span></footer>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const svg=d=>`<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
+// Stand-in for a captured screen (the app returns {path, preview} from takeScreenshot).
+const SHOT_PREVIEW='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="#1d2326"/><rect x="8" y="8" width="70" height="84" rx="4" fill="#2c3b35"/><rect x="82" y="8" width="70" height="84" rx="4" fill="#3a333a"/><rect x="40" y="70" width="80" height="10" rx="3" fill="#0d1111"/></svg>');
+let shotSeq=0;
+const ICON={
+  pause:svg('<path d="M9 6v12M15 6v12"/>'),
+  play:svg('<path d="M8 6l10 6-10 6z" fill="currentColor"/>'),
+  eyeOff:svg('<path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c5 0 8.5 4 9.5 6a13 13 0 0 1-2.6 3.4M6.5 7.6C4.5 9 3.2 10.8 2.5 12c1 2 4.5 6 9.5 6 1.6 0 3-.4 4.3-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'),
+  eye:svg('<path d="M2.5 12C3.5 10 7 6 12 6s8.5 4 9.5 6c-1 2-4.5 6-9.5 6s-8.5-4-9.5-6z"/><circle cx="12" cy="12" r="3"/>'),
+  shorter:svg('<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>'),
+  angle:svg('<path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v3h3M4 13a8 8 0 0 0 14.6 4.5M20 20v-3h-3"/>'),
+  copy:svg('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'),
+  why:svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+  back:svg('<path d="M15 6l-6 6 6 6"/>'),
+  stop:svg('<rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" stroke="none"/>'),
+  check:svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  x:svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  up:svg('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+  down:svg('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  scan:svg('<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="11.5" cy="11.5" r="3.5"/><path d="M16 16l-2-2"/>'),
+  loader:svg('<path d="M21 12a9 9 0 1 1-6.2-8.6"/>'),
+  spark:svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" fill="currentColor" stroke="none"/><path d="M19 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="currentColor" stroke="none"/>')
+};
+// Card text = the prompt sent to the assistant, keyed by suggestion topic (the answer stays in the scenario data).
+const PROMPTS={
+  'Understand the budget concern':'How do I find out whether the budget concern is about price or value?',
+  'No pricing commitment yet':'Should I offer a discount now, or clarify the scope first?',
+  'Find the approval path':'How do I find out who else needs to approve this?',
+  'Turn interest into a next step':'How do I turn their interest into a concrete next step?',
+  'Discover their criteria':'How do I learn what matters most in their vendor comparison?',
+  'Verify before comparing':'What can I safely say about the other vendor?',
+  'Define implementation effort':'How do I answer their worry about getting started?',
+  'Lead with your approach':'How should I answer the prioritization question?',
+  'Clarify the scenario':'Should I ask which kind of example they want?',
+  'Handle the follow-up':'How do I answer if a stakeholder still disagrees?',
+  'Explore the impact':'What should I ask about the time lost between their tools?',
+  'Find the real blocker':'Which of their three concerns should I tackle first, and how?',
+  'Integrations are the hidden risk':'What should I check before promising a migration date?',
+  'Offer the security pack':'What security documents can I offer to speed up their review?',
+  'Clarify the finance constraint':'How do I handle finance asking for a three-year commitment?',
+  'De-risk the migration':'How do I reassure them about the migration?',
+  'Map the integrations':'How do I deal with integrations nobody understands anymore?'
+};
+const KIND={ask:'Ask',say:'Say',remember:'Remember'};
+const scenarios={
+sales:{mode:'Sales · Northstar',title:'Northstar · Product discussion',goal:'Understand the budget concern and agree on a useful next step.',knowledge:'Demo product brief · pricing discussion guide',heard:'This is more than we planned to spend.',response:'That makes sense. Before we talk about price, which outcome would make this investment worthwhile for your team?',short:'Which outcome would make this investment worthwhile?',alternate:'Is the concern the total budget, or confidence that the results will justify it?',reason:'Acknowledge the concern, then understand whether the issue is affordability or perceived value. Avoid offering a discount before you know.',cue:{kind:'ask',topic:'Understand the budget concern',line:'Is the concern the total budget, or whether the value justifies it?'},second:{kind:'remember',topic:'No pricing commitment yet',line:'Clarify the scope before discussing a discount.'},next:[{heard:'Alex handles budget, but our security team needs to approve anything new.',kind:'ask',topic:'Find the approval path',line:'Who should we bring into the next conversation to cover budget and security?',response:'It sounds like there are two approvals to plan for. Who should join our next call so we can address both together?',reason:'Confirm the people involved without assuming the person speaking owns the decision.'},{heard:'If we can get the team comfortable, we would like to try this next month.',kind:'ask',topic:'Turn interest into a next step',line:'What would your team need to see in a trial to feel confident moving ahead?',response:'What would a successful trial need to prove for your team? We can use that to agree on the next step.',reason:'Convert general interest into clear evaluation criteria, without promising a trial or timeline.'}]},
+competitor:{mode:'Sales · Northstar',title:'Northstar · Evaluating options',goal:'Understand the evaluation criteria before positioning the product.',knowledge:'Demo product brief · no verified competitor comparison attached',heard:'We are also looking at another vendor. Why should we choose you?',response:'What matters most in your comparison: implementation, day-to-day workflow, or total cost? I can focus on the differences relevant to your team.',short:'What matters most in your comparison?',alternate:'What is working well in the other option, and what are you still unsure about?',reason:'Get the buyer’s criteria first. No verified competitor facts are attached, so avoid making comparative claims.',cue:{kind:'ask',topic:'Discover their criteria',line:'What is the other option doing well, and where are you still uncertain?'},second:{kind:'remember',topic:'Verify before comparing',line:'No approved competitor facts are attached. Avoid unsupported claims.'},next:[{heard:'Our biggest concern is how much time our team will spend getting started.',kind:'ask',topic:'Define implementation effort',line:'Which part of getting started is most concerning: setup, integration, or training?',response:'Which part of getting started feels most risky for your team? We can work through that before estimating a timeline.',reason:'A useful response names the uncertainty before proposing an implementation plan.'}]},
+interview:{mode:'Interview · Product role',title:'Panel interview · Product role',goal:'Explain your reasoning clearly and use real experience.',knowledge:'Demo resume · only confirmed personal examples',heard:'How do you prioritize when several stakeholders all say their request is urgent?',response:'I start by clarifying the outcome and the cost of waiting. Then I compare impact, urgency, and effort, and make the trade-offs explicit with the stakeholders.',short:'I compare impact, urgency, and effort, then align stakeholders on the trade-offs.',alternate:'I first separate a hard deadline from a strong preference, then agree on which outcome matters most.',reason:'Give a clear decision process first. Add a real example only if it is supported by your experience.',cue:{kind:'say',topic:'Lead with your approach',line:'Clarify the outcome, compare trade-offs, then align on the decision.'},second:{kind:'ask',topic:'Clarify the scenario',line:'Would it help if I used an example of conflicting deadlines?'},next:[{heard:'And what would you do if a stakeholder still disagreed with your decision?',kind:'say',topic:'Handle the follow-up',line:'Understand the disagreement, revisit the evidence, and make the decision process clear.',response:'I would first understand what they think we are missing. If that changes the evidence, I revisit the decision; otherwise, I explain the trade-off and agree on when to review it.',reason:'Acknowledge feedback while showing that you can make and communicate a decision.'}]},
+quiet:{mode:'Sales · Discovery',title:'Discovery · Getting started',goal:'Listen for the customer’s current problem.',knowledge:'Demo product brief',heard:'Thanks for making the time. Let me pull up my notes.',response:'',short:'',alternate:'',reason:'',cue:null,second:null,next:[{heard:'We are losing a lot of time moving information between our tools.',kind:'ask',topic:'Explore the impact',line:'Where does that handoff slow your team down the most?',response:'Where does that handoff slow your team down the most? I would like to understand the impact before suggesting a solution.',reason:'A specific discovery question is more useful than an early product pitch.'}]}};
+scenarios.long={mode:'Sales · Enterprise renewal',title:'Acme · Enterprise renewal',goal:'Keep the renewal on track while the security, migration and contract questions are open.',knowledge:'Demo product brief · security FAQ · migration guide',
+heard:'Honestly, between the security review, the migration from our current vendor, and finance asking for a three-year commitment, I am not sure we can sign before the end of the quarter, and I still need to understand what happens to our existing integrations if we switch.',
+response:'That is a lot to line up before the quarter ends, so let us separate it into three tracks. For security, we can send the completed questionnaire and our latest SOC 2 report today, and set up a call with your security lead this week. For the migration, our team runs the data import and keeps your existing integrations running in parallel until you confirm everything works. On the contract, a one-year term with a price lock for years two and three may give finance what they need. Which of these three is the real blocker for you right now?',
+short:'Which of the three, security, migration or the contract term, is the real blocker right now?',
+alternate:'If we could take the migration risk off your plate entirely, would security and the contract term still stop you from signing this quarter?',
+reason:'Break a pile of objections into separate tracks, offer a concrete next step for each, and end with a question that finds the real blocker.',
+cue:{kind:'ask',topic:'Find the real blocker',line:'Out of the security review, the migration and the three-year term, which one would stop the deal if we could not solve it this quarter?'},
+second:{kind:'remember',topic:'Integrations are the hidden risk',line:'They mentioned existing integrations twice. Confirm which ones are business critical before promising a migration date, and do not commit to a timeline you have not checked with the solutions team.'},
+extra:[
+ {kind:'say',topic:'Offer the security pack',line:'We can send our completed security questionnaire, the SOC 2 Type II report and the penetration test summary today, so your security team can start reviewing before we even meet.'},
+ {kind:'ask',topic:'Clarify the finance constraint',line:'When finance asks for a three-year commitment, is the goal a lower yearly price, budget certainty, or something else, and would a one-year term with a price lock work for them?'},
+ {kind:'say',topic:'De-risk the migration',line:'Our migration team runs the import for you and keeps your current integrations live in parallel, so nothing breaks while your team checks the new setup.'}
+],
+next:[{heard:'The integrations are really the scary part. We have a custom Salesforce sync and two internal tools that nobody fully understands anymore, and the person who built them left last year.',kind:'ask',topic:'Map the integrations',line:'Could we get thirty minutes with whoever owns those internal tools today, even if they did not build them, so our solutions engineer can map what each sync does before we estimate anything?',response:'That is a very common situation, and it is exactly why we map integrations before we commit to dates. Could we get thirty minutes with whoever owns those tools today? Our solutions engineer can document what each sync does, and we will come back with a migration plan you can review before anything moves.',reason:'Turn the scary unknown into a small, concrete discovery step owned by both sides.'}]};
+let state,toastTimer,requestTimer;
+
+function time(){return Math.floor(state.seconds/60)+':'+String(state.seconds%60).padStart(2,'0')}
+function toast(t){clearTimeout(toastTimer);$('toast').textContent=t;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,2600)}
+
+function reset(){
+  clearTimeout(requestTimer);clearTimeout(scanTimer);$('toast').hidden=true;$('announcer').textContent='';
+  const s=scenarios[$('scenario').value];
+  state={scenario:$('scenario').value,step:0,cues:[],done:[],chat:s.response?[{label:'Help me respond',shots:[],answer:s.response,short:s.short,alternate:s.alternate}]:[],heard:s.heard,selected:null,attached:[],view:'chat',undetectable:true,inApp:false,capture:true,auto:true,mic:true,system:true,hidden:false,ended:false,busy:false,scanning:false,fresh:null,stale:false,seconds:728};
+  if(s.cue&&!s.response)state.cues.push({...s.cue,id:'initial',heard:s.heard,response:s.response,short:s.short,alternate:s.alternate,reason:s.reason});
+  if(s.extra)state.cues.push(...s.extra.map((c,i)=>({...c,id:'extra-'+i,heard:s.heard,response:c.line,reason:'Use this when the moment fits.'})));
+  if(s.second)state.cues.push({...s.second,id:'second',heard:s.heard,response:s.second.line,reason:'Keep this point in mind while the conversation develops.'});
+  state.turns=[{speaker:'You',text:state.scenario==='interview'?'Happy to walk through how I approach it.':'What would you most like us to cover today?',time:'12:02'},{speaker:'Them',text:s.heard,time:'12:08'}];
+  Object.assign($('overlay').style,{left:'50%',top:'62px',transform:'translateX(-50%)'});
+  $('finish').hidden=true;$('pill').hidden=false;$('question').value='';
+  $('person-one').textContent=state.scenario==='interview'?'Jordan · Hiring manager':'Jordan Lee · Northstar';
+  $('person-two').textContent=state.scenario==='interview'?'Alex · Panel member':'Alex Smith · Northstar';
+  closePopover();render();
+}
+
+function render(){
+  const s=scenarios[state.scenario];
+  $('room-title').textContent=s.title;$('caption').textContent='“'+state.heard+'”';$('timer').textContent=time();
+  $('record-dot').className='dot '+(state.capture?'live':'paused');
+  $('capture').innerHTML=state.capture?ICON.pause:ICON.play;
+  $('capture').dataset.tip=state.capture?'Pause capture ⌘⇧P':'Resume capture ⌘⇧P';
+  $('capture').setAttribute('aria-label',$('capture').dataset.tip);
+  $('hide').innerHTML=state.hidden?ICON.eye:ICON.eyeOff;
+  $('hide').dataset.tip=state.hidden?'Show ⌘\\':'Hide ⌘\\';
+  $('hide').setAttribute('aria-label',state.hidden?'Show overlay':'Hide overlay');
+  $('panels').hidden=state.hidden||state.ended;
+  $('view').value=state.view;
+  $('overlay').hidden=state.inApp;
+  $('appwin').hidden=!state.inApp;
+  $('auto').checked=state.auto;
+  $('auto').parentElement.dataset.tip=state.auto?'Suggestions on':'Suggestions off';
+  $('scan').hidden=!state.auto;
+  $('scan').innerHTML=state.scanning?ICON.loader:ICON.scan;
+  $('scan').classList.toggle('scanning',state.scanning);
+  $('scan').disabled=state.scanning;
+  $('scan').dataset.tip=state.scanning?'Scanning…':'Scan now';
+  $('end').classList.remove('confirm');$('end').innerHTML=ICON.stop;
+  renderBody();renderCues();renderSend();
+}
+
+function renderSend(){$('send').innerHTML=ICON.up;}
+
+
+function renderBody(){
+  const top=$('body').scrollTop;
+  if(state.view==='transcript'){
+    $('body').innerHTML=state.turns.map(t=>`<p class="turn ${t.speaker==='You'?'me':''}"><b>${esc(t.speaker)} · ${t.time}</b>${esc(t.text)}</p>`).join('')+'<div id="spacer"></div>';
+    $('body').scrollTop=$('body').scrollHeight;updateMore();return;
+  }
+  $('body').innerHTML=state.chat.map((t,i)=>`<div class="chat-turn" id="turn-${i}"><div class="ub">${t.shots.length?`<div class="shots">${t.shots.map(a=>`<img src="${a.preview}" alt="Screenshot">`).join('')}</div>`:''}${esc(t.label)}</div>`+(t.pending
+    ?'<div class="skel"></div><div class="skel"></div>'
+    :`<p class="answer">${esc(t.answer)}</p><div class="tools">
+        <button class="ib" data-turn="${i}" data-action="shorter" data-tip="Shorter" aria-label="Shorter" ${t.answer===t.short?'disabled':''}>${ICON.shorter}</button>
+        <button class="ib" data-turn="${i}" data-action="angle" data-tip="Another angle" aria-label="Another angle">${ICON.angle}</button>
+        <button class="ib" data-turn="${i}" data-action="copy" data-tip="Copy" aria-label="Copy answer">${ICON.copy}</button>
+      </div>`)+'</div>').join('')+'<div id="spacer"></div>';
+  $('body').setAttribute('aria-busy',state.busy);
+  sizeSpacer();
+  $('body').scrollTop=top; // redrawing briefly drops the spacer, which would clamp the scroll position
+  updateMore();
+}
+
+// With history above, room below the newest turn lets it scroll to the top of the thread (as in Cluely).
+function sizeSpacer(){
+  const last=$('turn-'+(state.chat.length-1));
+  $('spacer').style.height=state.chat.length>1?Math.max(0,366-last.offsetHeight)+'px':'0';
+}
+function scrollToLast(){$('body').scrollTop=$('turn-'+(state.chat.length-1)).offsetTop-8;updateMore();}
+
+// Shows the bottom fade and ↓ button on a panel only while part of its content is out of view.
+function updateMore(){
+  [['body','body-down'],['cues','cues-down']].forEach(([id,btn])=>{
+    const el=$(id),pad=id==='body'?$('spacer').offsetHeight:0,more=el.scrollTop+el.clientHeight<el.scrollHeight-pad-4;
+    el.classList.toggle('more',more);$(btn).hidden=!more;$(btn).innerHTML=ICON.down;
+  });
+}
+
+function renderCues(){
+  $('cues').innerHTML=!state.auto?'':state.cues.map(c=>`<article class="cue k-${c.kind} ${state.selected===c.id?'selected':''} ${state.fresh===c.id?'fresh':''}">
+    <button class="cue-open" data-detail="${c.id}" aria-label="${KIND[c.kind]}: ${esc(PROMPTS[c.topic])}. Send to assistant"><span class="cue-label"><span>${esc(c.kind)}</span></span>${esc(PROMPTS[c.topic])}</button>
+    <button class="ib cue-dismiss" data-handle="${c.id}" data-tip="Dismiss" aria-label="Dismiss suggestion">${ICON.x}</button>
+  </article>`).join('');
+  state.fresh=null;
+  updateMore();
+}
+
+function ask(label){
+  state.view='chat';
+  state.chat.push({label,shots:state.attached,pending:true});state.attached=[];renderAttachments();
+  state.busy=true;render();scrollToLast();
+}
+
+function attachScreenshot(){
+  if(state.ended)return;
+  state.attached.push({id:++shotSeq,preview:SHOT_PREVIEW});renderAttachments();toast('Screenshot attached');
+}
+function renderAttachments(){
+  $('attachments').hidden=state.attached.length===0;
+  $('attachments').innerHTML=state.attached.map(a=>`<div class="thumb"><img src="${a.preview}" alt="Screenshot"><button type="button" class="rm" data-unattach="${a.id}" data-tip="Remove screenshot" aria-label="Remove screenshot">${ICON.x}</button></div>`).join('');
+}
+function answer(text,short,alternate){
+  clearTimeout(requestTimer);
+  Object.assign(state.chat[state.chat.length-1],{answer:text,short:short||text.split(/(?<=[?!.])\s/)[0],alternate:alternate||'Could you tell me a little more about what matters most to you here?',pending:false});
+  state.busy=false;renderBody();
+}
+
+function detail(id){
+  if(state.ended||state.busy)return;
+  const c=[...state.cues,...state.done].find(c=>c.id===id);state.selected=c.id;
+  ask(PROMPTS[c.topic]); // the card is a prompt: send it as typed, the answer comes back under it
+  requestTimer=setTimeout(()=>answer(c.response||c.line,c.short,c.alternate),550);
+}
+
+// Scan now: re-reads the conversation so far and surfaces the cue for the current moment if it is not shown yet.
+let scanTimer;
+function scanNow(){
+  state.scanning=true;render();$('announcer').textContent='Scanning';
+  scanTimer=setTimeout(()=>{
+    const s=scenarios[state.scenario];
+    const m=state.step?s.next[state.step-1]:s.cue;
+    const id=state.step?'moment-'+state.step:'initial';
+    state.scanning=false;
+    if(!m||[...state.cues,...state.done].some(c=>c.id===id)){render();toast('No new suggestions');return}
+    state.cues.unshift(state.step?{...m,id}:{...m,id,heard:s.heard,response:s.response,short:s.short,alternate:s.alternate,reason:s.reason});
+    state.fresh=id;render();$('announcer').textContent='New suggestion: '+m.line;
+  },900);
+}
+
+function retire(id){const c=state.cues.find(c=>c.id===id);state.cues=state.cues.filter(x=>x.id!==id);state.done.unshift(c);render();}
+
+function advance(){
+  if(state.ended){toast('Restart the demo to continue');return}
+  if(!state.capture||!state.system){toast('Capture is paused');return}
+  const s=scenarios[state.scenario];
+  if(state.step>=s.next.length){toast('End of scenario');return}
+  const m=s.next[state.step++];
+  state.seconds+=18;state.heard=m.heard;state.turns.push({speaker:'Them',text:m.heard,time:time()});
+  if(state.auto){
+    state.done.unshift(...state.cues);
+    state.cues=[{...m,id:'moment-'+state.step}];
+    state.fresh='moment-'+state.step;
+    $('announcer').textContent='New suggestion: '+m.line;
+  }
+  render();
+}
+
+const REQUEST_LABEL={respond:'Help me respond',ask:'Suggest a question',recap:'Recap the call'};
+function request(kind,custom=''){
+  if(state.ended||state.busy)return;
+  ask(custom||REQUEST_LABEL[kind]);$('announcer').textContent='Preparing a response';
+  requestTimer=setTimeout(()=>{
+    const s=scenarios[state.scenario];
+    const c=state.step?s.next[state.step-1]:{...s.cue,response:s.response,short:s.short,alternate:s.alternate};
+    if(kind==='recap')answer(state.scenario==='interview'?'The panel asked about prioritization and stakeholder trade-offs. Keep your explanation grounded in your own experience.':`The current topic is ${c.topic?c.topic.toLowerCase():'the customer’s situation'}. Confirm the concern, then agree on the next useful step.`);
+    else if(kind==='ask')answer(c.line||'What would be most useful for us to cover today?');
+    else if(custom)answer(/question|ask/i.test(custom)?c.line||'What matters most to your team?':c.response||s.response||'What is the main problem your team is trying to solve?');
+    else answer(c.response||s.response||'What would you most like to get out of this conversation?',c.short||s.short,c.alternate||s.alternate);
+  },550);
+}
+
+function closePopover(){$('popover').hidden=true;$('session').hidden=true;['actions','more'].forEach(id=>$(id).setAttribute('aria-expanded','false'));}
+
+// v1 Session options dropdown, content copied verbatim from live-call.html.
+function sessionMenu(){
+  if(!$('session').hidden){closePopover();return}
+  closePopover();
+  $('session').innerHTML=`<button class="close" aria-label="Close menu" data-close data-tip="Close">×</button><h3>Session options</h3><label>Capture my microphone<input type="checkbox" class="sw" role="switch" data-setting="mic" ${state.mic?'checked':''}></label><label>Capture call audio<input type="checkbox" class="sw" role="switch" data-setting="system" ${state.system?'checked':''}></label><label>Undetectable<input type="checkbox" class="sw" role="switch" data-setting="undetectable" ${state.undetectable?'checked':''}></label><label for="model">Model</label><select id="model"><option>Qwen 3.7 Flash</option><option>GLM 5.3 Flash</option></select><div class="menu-btns"><button data-back class="menu-btn"><svg class="i" viewBox="0 0 24 24"><path d="M10 7l-5 5 5 5M5 12h10a4 4 0 0 1 4 4v1"/></svg>Back to app</button><button data-discard class="menu-btn danger"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Discard this session…</button></div>`;
+  $('session').hidden=false;$('more').setAttribute('aria-expanded','true');
+}
+
+function placePopover(anchor){
+  const o=$('overlay').getBoundingClientRect(),a=$(anchor).getBoundingClientRect(),p=$('popover');
+  p.style.left=(a.left-o.left)+'px';p.style.top=(a.bottom-o.top+6)+'px';
+}
+
+function popover(type){
+  if(!$('popover').hidden&&$('popover').dataset.type===type){closePopover();return}
+  closePopover();
+  const html='<button class="row" data-request="respond" id="respond">Help me respond <small>⌘↵</small></button><button class="row" data-request="ask">Suggest a question</button><button class="row" data-request="recap">Recap the call</button>';
+  $('popover').innerHTML=html;$('popover').dataset.type=type;$('popover').hidden=false;$(type).setAttribute('aria-expanded','true');placePopover(type);
+}
+
+function finish(discard=false){
+  clearTimeout(requestTimer);state.busy=false;closePopover();$('panels').hidden=true;$('finish').hidden=false;
+  if(discard){$('finish').innerHTML='<h2>Discard this session?</h2><p>Transcript and suggestions will be deleted.</p><button data-cancel>Keep</button><button class="danger" data-confirm-discard>Discard</button>';return}
+  state.ended=true;state.capture=false;$('pill').hidden=true;
+  $('finish').innerHTML='<h2>Session saved</h2><p>Your recap is ready in Cheatly.</p><button data-restart>Restart demo</button>';
+}
+
+function toggleCapture(){state.capture=!state.capture;render();toast(state.capture?'Capture resumed':'Capture paused');}
+function toggleHide(){state.hidden=!state.hidden;closePopover();render();if(state.hidden)toast(state.capture?'Hidden · still recording':'Hidden');}
+
+$('scenario').onchange=reset;$('reset').onclick=reset;$('advance').onclick=advance;
+$('more').onclick=sessionMenu;$('actions').onclick=()=>popover('actions');
+$('capture').onclick=toggleCapture;$('hide').onclick=toggleHide;
+let endTimer;
+$('end').onclick=()=>{
+  if($('end').classList.contains('confirm')){clearTimeout(endTimer);finish();return}
+  $('end').classList.add('confirm');$('end').innerHTML=ICON.stop+'End & save';
+  endTimer=setTimeout(()=>{$('end').classList.remove('confirm');$('end').innerHTML=ICON.stop;},3000);
+};
+$('scan').onclick=scanNow;
+$('auto').onchange=()=>{state.auto=$('auto').checked;render();toast(state.auto?'Suggestions on':'Suggestions paused');};
+$('shot').onclick=attachScreenshot;
+$('view').onchange=()=>{state.view=$('view').value;renderBody();};
+$('attachments').onclick=e=>{const b=e.target.closest('[data-unattach]');if(b){state.attached=state.attached.filter(a=>a.id!==+b.dataset.unattach);renderAttachments();hideTip();}};
+$('composer').onsubmit=e=>{e.preventDefault();const q=$('question').value.trim();$('question').value='';renderSend();q?request('custom',q):request('respond');};
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('button');
+  if(b){
+    if(b.dataset.detail)detail(b.dataset.detail);
+    if(b.dataset.handle)retire(b.dataset.handle);
+    if(b.dataset.request){request(b.dataset.request);closePopover();}
+    const t=state.chat[+b.dataset.turn];
+    if(b.dataset.action==='shorter'){t.answer=t.short;renderBody();}
+    if(b.dataset.action==='angle'){[t.answer,t.alternate]=[t.alternate,t.answer];renderBody();}
+    if(b.dataset.action==='copy'){try{await navigator.clipboard.writeText(t.answer);toast('Copied');}catch{toast('Clipboard unavailable');}}
+    if(b.hasAttribute('data-close'))closePopover();
+    if(b.hasAttribute('data-back')){closePopover();state.inApp=true;render();}
+    if(b.hasAttribute('data-return')){state.inApp=false;render();}
+    if(b.hasAttribute('data-discard'))finish(true);
+    if(b.hasAttribute('data-cancel')){$('finish').hidden=true;render();}
+    if(b.hasAttribute('data-confirm-discard')){state.ended=true;state.capture=false;$('pill').hidden=true;$('finish').innerHTML='<h2>Session discarded</h2><p>No real data was changed.</p><button data-restart>Restart demo</button>';}
+    if(b.hasAttribute('data-restart'))reset();
+  }
+  if(!e.target.closest('#popover,#session,#actions,#more'))closePopover();
+});
+$('session').addEventListener('change',e=>{
+  if(e.target.dataset.setting){state[e.target.dataset.setting]=e.target.checked;render();if(e.target.dataset.setting==='undetectable')toast(state.undetectable?'Undetectable on':'Undetectable off');}
+  if(e.target.id==='model')toast('Demo model changed to '+e.target.value);
+});
+$('popover').addEventListener('change',e=>{
+  if(e.target.dataset.setting){state[e.target.dataset.setting]=e.target.checked;render();if(e.target.dataset.setting==='auto')toast(state.auto?'Suggestions on':'Suggestions paused');}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closePopover();
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();$('composer').requestSubmit();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='\\'){e.preventDefault();toggleHide();}
+  if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&e.key.toLowerCase()==='h'){e.preventDefault();attachScreenshot();}
+  if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();toggleCapture();}
+});
+// Tooltips: shown after a short hover (or on keyboard focus), above the pill, below everything else.
+let tipTimer;
+function showTip(t){
+  const r=t.getBoundingClientRect(),tip=$('tip');
+  tip.textContent=t.dataset.tip;tip.hidden=false;
+  tip.style.left=Math.max(4,Math.min(innerWidth-tip.offsetWidth-4,r.left+r.width/2-tip.offsetWidth/2))+'px';
+  tip.style.top=(t.closest('#pill')&&!t.closest('#session')?r.top-tip.offsetHeight-7:r.bottom+7)+'px';
+}
+function hideTip(){clearTimeout(tipTimer);$('tip').hidden=true;}
+document.addEventListener('mouseover',e=>{const t=e.target.closest('[data-tip]');hideTip();if(t)tipTimer=setTimeout(()=>showTip(t),250);});
+document.addEventListener('focusin',e=>{const t=e.target.closest('[data-tip]');if(t&&t.matches(':focus-visible'))showTip(t);});
+document.addEventListener('focusout',hideTip);
+document.addEventListener('pointerdown',hideTip);
+let drag;
+$('grip').onpointerdown=e=>{const r=$('overlay').getBoundingClientRect(),s=$('stage').getBoundingClientRect();drag={x:e.clientX,y:e.clientY,left:r.left-s.left,top:r.top-s.top};$('grip').setPointerCapture(e.pointerId);};
+$('grip').onpointermove=e=>{if(!drag)return;const maxX=Math.max(0,$('stage').clientWidth-$('overlay').offsetWidth);$('overlay').style.transform='none';$('overlay').style.left=Math.max(0,Math.min(maxX,drag.left+e.clientX-drag.x))+'px';$('overlay').style.top=Math.max(0,Math.min(Math.max(0,$('stage').clientHeight-$('overlay').offsetHeight),drag.top+e.clientY-drag.y))+'px';};
+$('grip').onpointerup=$('grip').onpointercancel=()=>drag=null;
+setInterval(()=>{if(state.capture&&!state.ended){state.seconds++;$('timer').textContent=time();}},1000);
+$('body').onscroll=updateMore;$('cues').onscroll=updateMore;
+$('body-down').onclick=()=>$('body').scrollTo({top:$('body').scrollHeight,behavior:'smooth'});
+$('cues-down').onclick=()=>$('cues').scrollTo({top:$('cues').scrollHeight,behavior:'smooth'});
+const wanted=new URLSearchParams(location.search).get('scenario');
+if(wanted&&scenarios[wanted])$('scenario').value=wanted;
+reset();
+</script>
+<script src="feedback.js"></script>
+</body>
+</html>
