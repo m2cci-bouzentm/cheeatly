@@ -88,9 +88,8 @@
 .lc .down { position: absolute; right: 12px; bottom: 8px; width: 28px; height: 28px; border-radius: 50%; background: #2f2f33; box-shadow: 0 0 0 1px #ffffff1f, 0 4px 10px #0006; display: grid; place-items: center; color: #d4d4da; padding: 0; }
 .lc .down:hover { color: #fff; background: #3a3a3f; }
 .lc .down svg.i { width: 14px; height: 14px; }
-/* Scrollbars like Cluely: thin, rounded, translucent thumb, no track */
-.lc .lc-thread,
-.lc .lc-cues { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent; }
+/* Scrollbars like Cluely: thin, rounded, translucent thumb, no track. No scrollbar-width/scrollbar-color:
+   WebKit (macOS) ignores ::-webkit-scrollbar once scrollbar-width is set and falls back to the native bar. */
 .lc .lc-thread::-webkit-scrollbar,
 .lc .lc-cues::-webkit-scrollbar { width: 6px; }
 .lc .lc-thread::-webkit-scrollbar-thumb,
