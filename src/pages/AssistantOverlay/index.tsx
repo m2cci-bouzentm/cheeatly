@@ -104,7 +104,7 @@ function contextFrom(messages: AppMessage[]): string {
     .join('\n');
 }
 
-const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
+const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSessionDiscarded }) => {
   // State
   // Panels visible. Hide keeps the pill on screen; the global toggle (⌘B) still hides the whole window.
   const [isExpanded, setIsExpanded] = useState(true);
@@ -112,7 +112,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
   const [inputValue, setInputValue] = useState('');
   const [, setSuggestionPanelPinned] = useState(false);
   const [popup, setPopup] = useState<'session' | 'actions' | null>(null);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [endingMeeting, setEndingMeeting] = useState(false);
   const [meetingEndError, setMeetingEndError] = useState('');
   const [attachedContext, setAttachedContext] = useState<AttachmentContext[]>([]);
@@ -142,6 +141,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
   const isCgEventTapAvailableRef = useRef(false);
   const answerPanelPinnedRef = useRef(false);
   const endingMeetingRef = useRef(false);
+  const leavingRef = useRef(false);
   const resetQuestionsRef = useRef<() => void>(() => {});
   const userScanRef = useRef<UserScan | null>(null);
   const toastSeqRef = useRef(0);
@@ -370,7 +370,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
   );
 
   const reportShellSize = useCallback(() => {
-    if (!contentRef.current) return;
+    if (!contentRef.current || leavingRef.current) return;
     const { width, height } = measureOverlay(contentRef.current);
     updateShellDimensions(width, height);
   }, []);
@@ -408,7 +408,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
   useEffect(() => {
     const id = requestAnimationFrame(reportShellSize);
     return () => cancelAnimationFrame(id);
-  }, [popup, isExpanded, confirmDiscard, reportShellSize]);
+  }, [popup, isExpanded, reportShellSize]);
 
   useEffect(() => {
     if (isScanning) setAnnouncement('Scanning');
@@ -442,8 +442,11 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
       else await window.desktopAPI.abortMeeting();
       await window.desktopAPI.modelSelectorCloseIfOpen();
       await window.desktopAPI.closeSettingsWindow();
+      leavingRef.current = true;
       await window.desktopAPI.setWindowMode('launcher');
+      if (!save) onSessionDiscarded();
     } catch (error) {
+      leavingRef.current = false;
       setMeetingEndError(String(error));
     } finally {
       endingMeetingRef.current = false;
@@ -528,14 +531,15 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
   };
   toggleHideRef.current = toggleHide;
 
-  const backToApp = () => {
+  const discard = () => {
     setPopup(null);
-    window.desktopAPI.setWindowMode('launcher');
+    void finishMeeting(false);
   };
 
-  const askDiscard = () => {
+  const backToApp = () => {
+    leavingRef.current = true;
     setPopup(null);
-    setConfirmDiscard(true);
+    window.desktopAPI.setWindowMode('launcher');
   };
 
   const toggleSuggestions = () => {
@@ -711,7 +715,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
             onUndetectable={setUndetectable}
             onModel={selectModel}
             onBackToApp={backToApp}
-            onDiscard={askDiscard}
+            onDiscard={discard}
             onClose={() => setPopup(null)}
           />
         )}
@@ -725,22 +729,12 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = () => {
         </div>
       )}
 
-      {confirmDiscard && !meetingEndError && (
-        <div className="finish">
-          <h2>Discard this session?</h2>
-          <p>Transcript and suggestions will be deleted.</p>
-          <button onClick={() => setConfirmDiscard(false)}>Keep</button>
-          <button className="danger" disabled={endingMeeting} onClick={() => void finishMeeting(false)}>
-            Discard
-          </button>
-        </div>
-      )}
-
-      {isExpanded && !confirmDiscard && !meetingEndError && (
+      {isExpanded && !meetingEndError && (
         <div className="panels">
           <ConversationPanel
             view={view}
             onView={setView}
+            engineLoading={starting}
             scrollRef={scrollContainerRef}
             maxHeight={listMaxHeight}
             more={threadCue.more}

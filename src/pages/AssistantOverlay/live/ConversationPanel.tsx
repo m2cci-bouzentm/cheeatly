@@ -1,12 +1,13 @@
 import React from 'react';
 import type { AttachmentContext } from '../types.ts';
-import { BoltIcon, CameraIcon, DownIcon, UpIcon, XIcon } from './icons.tsx';
+import { BoltIcon, CameraIcon, DownIcon, LoaderIcon, UpIcon, XIcon } from './icons.tsx';
 
 export type ConversationView = 'chat' | 'transcript';
 
 type ConversationPanelProps = {
   view: ConversationView;
   onView: (view: ConversationView) => void;
+  engineLoading: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   maxHeight: number;
   more: boolean;
@@ -25,11 +26,17 @@ type ConversationPanelProps = {
   children: React.ReactNode;
 };
 
-// Answer panel: v1 view selector (Chat / Transcript), the scrollable body, then the v1 footer with the
+const TABS: [ConversationView, string][] = [
+  ['chat', 'Chat'],
+  ['transcript', 'Transcript'],
+];
+
+// Answer panel: Chat / Transcript tabs (v18), the scrollable body, then the v1 footer with the
 // screenshot tray and the composer (⚡ quick actions, camera, input, send).
 const ConversationPanel: React.FC<ConversationPanelProps> = ({
   view,
   onView,
+  engineLoading,
   scrollRef,
   maxHeight,
   more,
@@ -49,28 +56,37 @@ const ConversationPanel: React.FC<ConversationPanelProps> = ({
 }) => (
   <section className="panel main" aria-label="Assistant">
     <div className="main-header">
-      <label className="sr" htmlFor="lc-view">
-        Conversation view
-      </label>
-      <select
-        id="lc-view"
-        className="view-select"
-        value={view}
-        onChange={(e) => onView(e.target.value as ConversationView)}
-      >
-        <option value="chat">Chat</option>
-        <option value="transcript">Transcript</option>
-      </select>
+      <div className="tabs" role="tablist" aria-label="Conversation view">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            className="tab"
+            role="tab"
+            aria-selected={view === id}
+            aria-controls="lc-thread"
+            onClick={() => onView(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
     <div className="scrollwrap">
       <div
         ref={scrollRef}
+        id="lc-thread"
         className={more ? 'lc-thread more' : 'lc-thread'}
         style={{ maxHeight }}
         role="region"
         aria-label="Assistant content"
         aria-busy={busy}
       >
+        {engineLoading && (
+          <p className="engine" role="status">
+            <LoaderIcon />
+            Loading local engine…
+          </p>
+        )}
         {children}
       </div>
       {more && (

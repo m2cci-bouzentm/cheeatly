@@ -18,6 +18,7 @@ import { analytics } from './lib/analytics/analytics.service';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
+const LAUNCHER_NOTICE_MS = 2600;
 
 const App: React.FC = () => {
   const [windowMode, setWindowMode] = useState(() => new URLSearchParams(window.location.search).get('window') || 'launcher');
@@ -120,24 +121,37 @@ const App: React.FC = () => {
   }, [isOverlayWindow]);
 
   const [startError, setStartError] = useState('');
+  // Start can wait on the local speech engine: the overlay opens at once and shows that it is loading.
+  const [meetingStarting, setMeetingStarting] = useState(false);
+  const [launcherNotice, setLauncherNotice] = useState('');
+  useEffect(() => {
+    if (!launcherNotice) return;
+    const timer = setTimeout(() => setLauncherNotice(''), LAUNCHER_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [launcherNotice]);
   const handleStartMeeting = async () => {
     setStartError('');
+    setMeetingStarting(true);
     try {
       localStorage.setItem('cheatly_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
       const outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
 
+      await window.desktopAPI.setWindowMode('overlay');
       const result = await window.desktopAPI.startMeeting({
         audio: { inputDeviceId, outputDeviceId },
       });
       if (result.success) {
-        await window.desktopAPI.setWindowMode('overlay');
         analytics.trackMeetingStarted();
         return;
       }
       setStartError(result.error || 'Unable to start meeting');
+      await window.desktopAPI.setWindowMode('launcher');
     } catch (err) {
       setStartError(String(err));
+      await window.desktopAPI.setWindowMode('launcher');
+    } finally {
+      setMeetingStarting(false);
     }
   };
 
@@ -187,7 +201,11 @@ const App: React.FC = () => {
                   } as React.CSSProperties
                 }
               >
-                <AssistantOverlay overlayOpacity={overlayOpacity} />
+                <AssistantOverlay
+                  overlayOpacity={overlayOpacity}
+                  starting={meetingStarting}
+                  onSessionDiscarded={() => setLauncherNotice('Session discarded')}
+                />
               </div>
               <ToastViewport />
             </ToastProvider>
@@ -233,6 +251,15 @@ const App: React.FC = () => {
             </ToastProvider>
           </QueryClientProvider>
         </motion.div>
+
+        {launcherNotice && (
+          <div
+            role="status"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] rounded-lg border border-white/10 bg-[#2c2c30] px-[13px] py-2 text-xs text-[#e5e5ea] shadow-lg pointer-events-none"
+          >
+            {launcherNotice}
+          </div>
+        )}
 
         <PermissionsToaster
           isOpen={showPermissionsToaster}

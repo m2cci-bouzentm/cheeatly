@@ -69,7 +69,12 @@
 /* v1 KEEP: view selector, rules copied verbatim from live-call.html */
 .lc .main-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 10px; gap: 6px; }
 .lc .main-header { padding: 10px 16px 7px; }
-.lc .view-select { font: inherit; font-size: 12px; color: #d4d4da; background: #242427; border: 0; padding: 5px 4px; max-width: 140px; }
+.lc .tabs { display: flex; gap: 16px; }
+.lc .tab { font-size: 12px; font-weight: 500; color: #8f9097; padding: 5px 0 6px; border-bottom: 2px solid transparent; }
+.lc .tab:hover { color: #d4d4da; }
+.lc .tab[aria-selected="true"] { color: #e9e9ed; border-bottom-color: #e9e9ed; }
+.lc .engine { display: flex; align-items: center; gap: 8px; color: #8f9097; font-size: 12px; padding: 6px 0 10px; margin: 0; }
+.lc .engine svg { animation: lc-spin 0.8s linear infinite; }
 .lc .lc-thread { padding: 8px 18px 6px; overflow: auto; position: relative; }
 /* One thread, Cluely style: request bubble on the right, answer under it, newest scrolled to the top */
 .lc .chat-turn + .chat-turn { margin-top: 18px; }

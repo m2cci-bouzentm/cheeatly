@@ -74,7 +74,7 @@ const SessionMenu: React.FC<SessionMenuProps> = ({
       </button>
       <button className="menu-btn danger" onClick={onDiscard}>
         <TrashIcon />
-        Discard this session…
+        Discard session
       </button>
     </div>
   </div>

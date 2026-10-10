@@ -168,7 +168,7 @@ test('Session options stays embedded in the pill, selects a model, and dismisses
   ).toBe(false);
 });
 
-// End & save needs two clicks (arm, confirm); Discard goes through Session options and a confirm card.
+// End & save needs two clicks (arm, confirm); Discard is one click in Session options (no confirm card).
 async function startFinish(page: Page, label: string) {
   // Programmatic clicks (no mousedown) keep the call log to the meeting commands themselves.
   const click = (name: string) =>
@@ -187,9 +187,8 @@ async function startFinish(page: Page, label: string) {
     return;
   }
   await click('More session options');
-  await click('Discard this session…');
   await page
-    .getByRole('button', { name: 'Discard', exact: true })
+    .getByRole('button', { name: 'Discard session', exact: true })
     .evaluate((node: HTMLButtonElement) => {
       node.click();
       node.click();
@@ -232,6 +231,10 @@ for (const [label, command] of [
       ['closeSettingsWindow'],
       ['setWindowMode', 'launcher'],
     ]);
+    if (label === 'Discard')
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Session discarded' })
+      ).toBeVisible();
   });
 
   test(`${label} failure stays in overlay and permits retry`, async ({
@@ -265,9 +268,7 @@ for (const [label, command] of [
       false
     );
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    if (label === 'Discard')
-      await page.getByRole('button', { name: 'Discard', exact: true }).click();
-    else await startFinish(page, label);
+    await startFinish(page, label);
     await expect(
       page.getByRole('button', { name: 'Logo Start Cheatly' })
     ).toBeVisible();
@@ -400,4 +401,75 @@ test('overlay remount hydrates backend suggestions and ignores older revisions',
     page.locator('.cue-open', { hasText: 'Retained question?' })
   ).toBeVisible();
   expect(await scans(page)).toEqual([]);
+});
+
+test('Chat and Transcript are tabs', async ({ page }) => {
+  await openOverlay(page);
+  const chat = page.getByRole('tab', { name: 'Chat' });
+  const transcript = page.getByRole('tab', { name: 'Transcript' });
+  await expect(chat).toHaveAttribute('aria-selected', 'true');
+  await transcript.click();
+  await expect(transcript).toHaveAttribute('aria-selected', 'true');
+  await expect(chat).toHaveAttribute('aria-selected', 'false');
+});
+
+test('Start opens the overlay at once and shows the engine loading until the meeting starts', async ({
+  page,
+}) => {
+  await openOverlay(page);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.desktopAPI.startMeeting = () =>
+      new Promise((resolve) => {
+        w.behavior.started = resolve;
+      });
+    window.dispatchEvent(
+      new CustomEvent('cheatly-window-mode', { detail: 'launcher' })
+    );
+  });
+  await page.getByRole('button', { name: 'Logo Start Cheatly' }).click();
+  const loading = page.getByText('Loading local engine…', { exact: true });
+  await expect(loading).toBeVisible();
+  await page.getByRole('tab', { name: 'Transcript' }).click();
+  await expect(loading).toBeVisible();
+  await page.evaluate(() => (window as any).behavior.started({ success: true }));
+  await expect(loading).toBeHidden();
+  await expect(page.getByRole('button', { name: 'End and save' })).toBeVisible();
+});
+
+test('Back to app stops overlay resizes so the launcher keeps its size', async ({
+  page,
+}) => {
+  await openOverlay(page);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.desktopAPI.updateContentDimensions = (dimensions: unknown) => {
+      w.behavior.calls.push(['updateContentDimensions', dimensions]);
+    };
+    // Like Tauri, the mode event comes back after the IPC round trip, not synchronously.
+    w.desktopAPI.setWindowMode = async (mode: string) => {
+      w.behavior.calls.push(['setWindowMode', mode]);
+      setTimeout(
+        () =>
+          window.dispatchEvent(
+            new CustomEvent('cheatly-window-mode', { detail: mode })
+          ),
+        50
+      );
+    };
+  });
+  await page.getByRole('button', { name: 'More session options' }).click();
+  await page.evaluate(() => {
+    (window as any).behavior.calls = [];
+  });
+  await page.getByRole('button', { name: 'Back to app', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Logo Start Cheatly' })
+  ).toBeVisible();
+  await page.waitForTimeout(100);
+  const names: string[] = (
+    await page.evaluate(() => (window as any).behavior.calls)
+  ).map((call: unknown[]) => call[0]);
+  // Nothing may resize the window after it switched to the launcher size.
+  expect(names.slice(names.indexOf('setWindowMode') + 1)).toEqual([]);
 });
