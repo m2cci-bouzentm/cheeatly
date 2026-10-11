@@ -560,13 +560,17 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
     window.desktopAPI.setWindowMode('launcher');
   };
 
-  const toggleSuggestions = () => {
-    if (!questionAnalysisEnabled) {
-      showToast('Turn on suggestions in Settings');
+  // Same switch as Settings: it is saved, so the next meeting starts the way the user left it.
+  const toggleSuggestions = async () => {
+    const enable = questionDetectionPaused;
+    try {
+      await window.desktopAPI.setQuestionAnalysisConfig({ enabled: enable });
+    } catch (error) {
+      showToast(String(error));
       return;
     }
-    setQuestionsPaused(!analysisPaused);
-    showToast(analysisPaused ? 'Suggestions on' : 'Suggestions paused');
+    if (enable && analysisPaused) setQuestionsPaused(false);
+    showToast(enable ? 'Suggestions on' : 'Suggestions off');
   };
 
   const scanNow = () => {
@@ -797,7 +801,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
             scanning={isScanning}
             maxHeight={listMaxHeight}
             selectedId={selectedQuestionId}
-            onToggle={toggleSuggestions}
+            onToggle={() => void toggleSuggestions()}
             onScan={scanNow}
             onSend={sendSuggestion}
             onDismiss={dismissQuestion}

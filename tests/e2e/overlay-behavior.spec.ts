@@ -91,6 +91,11 @@ async function openOverlay(page: Page, interval = 3600) {
         scanNotice: 'Waiting for speech. Record a question, then scan again.',
       });
     };
+    w.desktopAPI.setQuestionAnalysisConfig = async (config: { enabled: boolean }) => {
+      w.behavior.calls.push(['setQuestionAnalysisConfig', config.enabled]);
+      w.behavior.publishQuestions({ settingsEnabled: config.enabled });
+      return { success: true };
+    };
     w.desktopAPI.setQuestionsPaused = async (isPaused: boolean) => {
       w.behavior.calls.push(['setQuestionsPaused', isPaused]);
       return w.behavior.publishQuestions({ isPaused, isScanning: false });
@@ -333,7 +338,7 @@ test('scan errors and subsequent suggestions are rendered from backend state', a
   expect(await scans(page)).toHaveLength(2);
 });
 
-test('backend pending state disables scan and pause invokes backend command', async ({
+test('backend pending state disables scan and the switch saves the setting', async ({
   page,
 }) => {
   await openOverlay(page);
@@ -345,21 +350,40 @@ test('backend pending state disables scan and pause invokes backend command', as
   ).toBeDisabled();
   const suggestions = page.getByRole('switch', { name: 'Automatic suggestions' });
   await suggestions.click();
-  await expect(page.getByText('Suggestions paused', { exact: true })).toBeVisible();
+  await expect(page.getByText('Suggestions off', { exact: true })).toBeVisible();
+  await expect(suggestions).not.toBeChecked();
   await suggestions.click();
-  await expect(
-    page.getByRole('button', { name: 'Scan now', exact: true })
-  ).toBeEnabled();
+  await expect(suggestions).toBeChecked();
   expect(
     await page.evaluate(() =>
       (window as any).behavior.calls.filter(
-        (call: string[]) => call[0] === 'setQuestionsPaused'
+        (call: string[]) => call[0] === 'setQuestionAnalysisConfig'
       )
     )
   ).toEqual([
-    ['setQuestionsPaused', true],
-    ['setQuestionsPaused', false],
+    ['setQuestionAnalysisConfig', false],
+    ['setQuestionAnalysisConfig', true],
   ]);
+});
+
+test('suggestions off by default turn on from the overlay switch', async ({ page }) => {
+  await openOverlay(page);
+  await page.evaluate(() =>
+    (window as any).behavior.publishQuestions({ settingsEnabled: false })
+  );
+  const suggestions = page.getByRole('switch', { name: 'Automatic suggestions' });
+  await expect(suggestions).not.toBeChecked();
+  await suggestions.click();
+  await expect(page.getByText('Suggestions on', { exact: true })).toBeVisible();
+  await expect(suggestions).toBeChecked();
+  await expect(page.getByText('Turn on suggestions in Settings')).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      (window as any).behavior.calls.filter(
+        (call: string[]) => call[0] === 'setQuestionAnalysisConfig'
+      )
+    )
+  ).toEqual([['setQuestionAnalysisConfig', true]]);
 });
 
 test('overlay remount hydrates backend suggestions and ignores older revisions', async ({
