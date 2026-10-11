@@ -71,26 +71,52 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
     hide_window(app)
 }
 
+// tao's set_decorations(true) rebuilds the macOS style mask without FullSizeContentView, so after a
+// meeting the launcher got a separate, fully transparent title bar: clicks on the close button and drags
+// there fell through to the window behind. On macOS the whole mask is set here instead, synchronously
+// on the main thread (tao applies its own mask changes later, which would race with a correction).
+fn set_frame_style(window: &WebviewWindow, launcher: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let ns_window = window.ns_window().map_err(error)? as usize;
+        window
+            .run_on_main_thread(move || unsafe {
+                use objc2::{msg_send, runtime::AnyObject, runtime::Bool};
+                // Titled | Closable | Miniaturizable | Resizable | FullSizeContentView, as created with
+                // titleBarStyle "Overlay"; the overlay is borderless and fixed in size.
+                let mask: usize = if launcher { 1 | 2 | 4 | 8 | 1 << 15 } else { 0 };
+                let ns_window = ns_window as *mut AnyObject;
+                let responder: *mut AnyObject = msg_send![ns_window, firstResponder];
+                let _: () = msg_send![ns_window, setStyleMask: mask];
+                let _: Bool = msg_send![ns_window, makeFirstResponder: responder];
+            })
+            .map_err(error)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        window.set_decorations(launcher).map_err(error)?;
+        window.set_resizable(launcher).map_err(error)
+    }
+}
+
 #[tauri::command]
 pub fn set_window_mode(app: AppHandle, mode: String, inactive: Option<bool>) -> Result<(), String> {
     let window = main_window(&app)?;
     match mode.as_str() {
         "launcher" => {
-            window.set_decorations(true).map_err(error)?;
+            set_frame_style(&window, true)?;
             window
                 .set_size(tauri::LogicalSize::new(900.0, 680.0))
                 .map_err(error)?;
-            window.set_resizable(true).map_err(error)?;
             window
                 .eval("window.dispatchEvent(new CustomEvent('cheatly-window-mode', {detail:'launcher'}))")
                 .map_err(error)?;
         }
         "overlay" => {
-            window.set_decorations(false).map_err(error)?;
+            set_frame_style(&window, false)?;
             window
                 .set_size(tauri::LogicalSize::new(520.0, 240.0))
                 .map_err(error)?;
-            window.set_resizable(false).map_err(error)?;
             window
                 .eval("window.dispatchEvent(new CustomEvent('cheatly-window-mode', {detail:'overlay'}))")
                 .map_err(error)?;
