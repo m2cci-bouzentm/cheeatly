@@ -7,7 +7,7 @@ const initial: QuestionSnapshot = {
   isScanning: false,
   scanError: '',
   scanNotice: '',
-  settingsEnabled: true,
+  settingsEnabled: false,
   isPaused: false,
   revision: -1,
 };

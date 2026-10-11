@@ -129,7 +129,7 @@ pub async fn get_question_analysis_config(
     let settings = state.settings.lock().map_err(error)?;
     let values = settings.values();
     Ok(QuestionAnalysisConfig {
-        enabled: values.question_analysis_enabled.unwrap_or(true),
+        enabled: values.question_analysis_enabled(),
         interval: values.question_analysis_interval.unwrap_or(20),
         model: values.question_analysis_model.clone().unwrap_or_default(),
         open_router_api_key: if credentials.question_analysis_api_key.is_some() {

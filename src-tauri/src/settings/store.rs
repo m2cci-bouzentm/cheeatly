@@ -20,6 +20,13 @@ pub struct AppSettings {
     pub system_muted: Option<bool>,
 }
 
+impl AppSettings {
+    // Automatic suggestions cost LLM calls, so they stay off until the user turns them on.
+    pub fn question_analysis_enabled(&self) -> bool {
+        self.question_analysis_enabled.unwrap_or(false)
+    }
+}
+
 pub struct SettingsStore {
     path: PathBuf,
     values: AppSettings,

@@ -228,7 +228,7 @@ export const AIProvidersSettings: React.FC = () => {
 };
 
 function QuestionDetectionSection() {
-  const [enabled, setEnabled] = useState(true);
+  const [enabled, setEnabled] = useState(false);
   const [interval, setIntervalVal] = useState(20);
   const [scanModel, setScanModel] = useState('');
   const [useCustomModel, setUseCustomModel] = useState(false);

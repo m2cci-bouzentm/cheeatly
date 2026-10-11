@@ -7,13 +7,16 @@ use crate::{
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
-    collections::HashSet,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio_util::sync::CancellationToken;
 
-#[derive(Clone, Serialize)]
+// Text at least this similar to text already handled counts as the same: STT corrections, repeated
+// phrases and re-asked questions trigger no automatic LLM scan and add no duplicate suggestion.
+const SIMILAR_TEXT_THRESHOLD: f64 = 0.9;
+
+#[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionSnapshot {
     pub questions: Vec<Value>,
@@ -24,25 +27,12 @@ pub struct QuestionSnapshot {
     pub is_paused: bool,
     pub revision: u64,
 }
-impl Default for QuestionSnapshot {
-    fn default() -> Self {
-        Self {
-            questions: vec![],
-            is_scanning: false,
-            scan_error: String::new(),
-            scan_notice: String::new(),
-            settings_enabled: true,
-            is_paused: false,
-            revision: 0,
-        }
-    }
-}
 struct ScanState {
     view: QuestionSnapshot,
     generation: u64,
     cancellation: CancellationToken,
-    seen: HashSet<String>,
-    last_transcript: String,
+    seen: Vec<String>,
+    scanned_sentences: Vec<String>,
     last_attempt: Instant,
 }
 impl Default for ScanState {
@@ -51,8 +41,8 @@ impl Default for ScanState {
             view: Default::default(),
             generation: 0,
             cancellation: CancellationToken::new(),
-            seen: HashSet::new(),
-            last_transcript: String::new(),
+            seen: vec![],
+            scanned_sentences: vec![],
             last_attempt: Instant::now(),
         }
     }
@@ -65,7 +55,7 @@ impl ScanState {
         self.view.is_scanning = false;
         self.view.scan_error.clear();
         self.view.scan_notice.clear();
-        self.last_transcript.clear();
+        self.scanned_sentences.clear();
         self.seen.clear();
         self.last_attempt = Instant::now();
     }
@@ -81,7 +71,7 @@ impl ScanState {
                 }
             }
             Ok(result) => {
-                self.last_transcript = transcript;
+                self.scanned_sentences = transcript_sentences(&transcript);
                 if result.questions.is_empty() {
                     self.view.scan_notice = "Scan complete. No actionable questions found.".into();
                     return;
@@ -91,9 +81,11 @@ impl ScanState {
                     let Some(text) = question.get("text").and_then(Value::as_str) else {
                         continue;
                     };
-                    if text.trim().is_empty() || !self.seen.insert(text.trim().to_lowercase()) {
+                    let key = normalize(text);
+                    if key.is_empty() || self.seen.iter().any(|seen| is_similar(seen, &key)) {
                         continue;
                     }
+                    self.seen.push(key);
                     question["id"] = json!(uuid::Uuid::new_v4().to_string());
                     question["timestamp"] = json!(
                         std::time::SystemTime::now()
@@ -128,6 +120,36 @@ impl ScanState {
             }
         }
     }
+}
+
+fn normalize(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+fn is_similar(a: &str, b: &str) -> bool {
+    strsim::sorensen_dice(a, b) >= SIMILAR_TEXT_THRESHOLD
+}
+// Sentences, not lines: a speaker's consecutive finals grow one turn, so a short question at the end
+// of a long turn would still look 90% like the turn that was already scanned.
+fn transcript_sentences(transcript: &str) -> Vec<String> {
+    transcript
+        .lines()
+        .flat_map(|line| {
+            line.split_once(": ")
+                .map_or(line, |(_, text)| text)
+                .split(['.', '?', '!'])
+        })
+        .map(normalize)
+        .filter(|sentence| !sentence.is_empty())
+        .collect()
+}
+// A scan is needed only when some sentence is not (nearly) one the last scan already sent.
+fn has_new_sentences(transcript: &str, scanned: &[String]) -> bool {
+    transcript_sentences(transcript)
+        .iter()
+        .any(|sentence| !scanned.iter().any(|done| is_similar(sentence, done)))
 }
 
 pub struct QuestionService {
@@ -166,8 +188,7 @@ impl QuestionService {
             .lock()
             .map_err(|e| e.to_string())?
             .values()
-            .question_analysis_enabled
-            .unwrap_or(true);
+            .question_analysis_enabled();
         let mut state = self.state.lock().map_err(|e| e.to_string())?;
         if state.generation != meeting.generation || state.view.settings_enabled != enabled {
             if state.generation != meeting.generation {
@@ -261,7 +282,7 @@ impl QuestionService {
                         < Duration::from_secs(
                             settings.question_analysis_interval.unwrap_or(20).max(1) as u64,
                         )
-                    || state.last_transcript == transcript)
+                    || !has_new_sentences(&transcript, &state.scanned_sentences))
             {
                 return Ok(state.view.clone());
             }
@@ -303,7 +324,7 @@ mod tests {
     fn scan_results_deduplicate_validate_retry_and_reset() {
         let mut state = ScanState::default();
         state.finish(Err("offline".into()), "Them: question".into(), true);
-        assert!(state.last_transcript.is_empty());
+        assert!(state.scanned_sentences.is_empty());
         assert!(state.view.scan_error.contains("offline"));
         state.finish(
             Ok(Questions {
@@ -319,7 +340,7 @@ mod tests {
         );
         assert_eq!(state.view.questions.len(), 1);
         assert_eq!(state.view.questions[0]["speaker"], "Them");
-        assert_eq!(state.last_transcript, "Them: question");
+        assert_eq!(state.scanned_sentences, ["question"]);
         let token = state.cancellation.clone();
         state.reset();
         assert!(token.is_cancelled());
@@ -357,6 +378,7 @@ mod tests {
             .lock()
             .unwrap()
             .update(|s| {
+                s.question_analysis_enabled = Some(true);
                 s.question_analysis_window = Some(2);
                 s.question_analysis_interval = Some(2);
             })
@@ -412,6 +434,11 @@ mod tests {
     #[tokio::test]
     async fn pending_scan_single_flight_pause_cancellation_and_settings_reset() {
         let h = crate::meetings::service::tests::Harness::new();
+        h.settings
+            .lock()
+            .unwrap()
+            .update(|s| s.question_analysis_enabled = Some(true))
+            .unwrap();
         let service = service(&h);
         h.meeting.start(None).await.unwrap();
         h.capture.speech("Question?", true, "user");
@@ -484,6 +511,125 @@ mod tests {
             .unwrap();
     }
     #[tokio::test]
+    async fn automatic_scans_are_off_by_default() {
+        let h = crate::meetings::service::tests::Harness::new();
+        h.settings
+            .lock()
+            .unwrap()
+            .update(|s| s.question_analysis_interval = Some(1))
+            .unwrap();
+        let service = service(&h);
+        h.meeting.start(None).await.unwrap();
+        service.snapshot().unwrap();
+        h.capture
+            .speech("Which database do you use?", true, "interviewer");
+        service.state.lock().unwrap().last_attempt = Instant::now() - Duration::from_secs(2);
+        let view = service
+            .scan_with(false, |_| async {
+                panic!("automatic scan ran without opting in")
+            })
+            .await
+            .unwrap();
+        assert!(!view.settings_enabled);
+    }
+    #[tokio::test]
+    async fn automatic_scans_skip_similar_text_and_run_for_new_sentences() {
+        let h = crate::meetings::service::tests::Harness::new();
+        h.settings
+            .lock()
+            .unwrap()
+            .update(|s| {
+                s.question_analysis_enabled = Some(true);
+                s.question_analysis_interval = Some(1);
+            })
+            .unwrap();
+        let service = service(&h);
+        h.meeting.start(None).await.unwrap();
+        service.snapshot().unwrap();
+        let elapse = || {
+            service.state.lock().unwrap().last_attempt = Instant::now() - Duration::from_secs(2);
+        };
+        h.capture.speech(
+            "Which database do you use for analytics?",
+            true,
+            "interviewer",
+        );
+        elapse();
+        service
+            .scan_with(false, |_| async { Ok(Questions { questions: vec![] }) })
+            .await
+            .unwrap();
+        // The same question again with a small STT difference: no LLM call.
+        h.capture.speech(
+            "which database do you use for analytics",
+            true,
+            "interviewer",
+        );
+        elapse();
+        service
+            .scan_with(false, |_| async { panic!("similar text scanned") })
+            .await
+            .unwrap();
+        // The user can still force it.
+        let manual = service
+            .scan_with(true, |_| async { Ok(Questions { questions: vec![] }) })
+            .await
+            .unwrap();
+        assert!(manual.scan_notice.starts_with("Scan complete"));
+        h.capture
+            .speech("How do you handle schema migrations?", true, "interviewer");
+        elapse();
+        let mut called = false;
+        service
+            .scan_with(false, |_| {
+                called = true;
+                async { Ok(Questions { questions: vec![] }) }
+            })
+            .await
+            .unwrap();
+        assert!(
+            called,
+            "a new question appended to the same turn must be scanned"
+        );
+        // A reset forgets what was scanned.
+        service.reset().unwrap();
+        elapse();
+        let mut called = false;
+        service
+            .scan_with(false, |_| {
+                called = true;
+                async { Ok(Questions { questions: vec![] }) }
+            })
+            .await
+            .unwrap();
+        assert!(called, "text must be scanned again after a reset");
+    }
+    #[test]
+    fn near_duplicate_suggestions_are_dropped() {
+        let mut state = ScanState::default();
+        state.finish(
+            Ok(Questions {
+                questions: vec![
+                    json!({"text":"How do you scale the database?"}),
+                    json!({"text":"How do you scale the database"}),
+                    json!({"text":"How do you test the API?"}),
+                ],
+            }),
+            "Them: question".into(),
+            true,
+        );
+        assert_eq!(state.view.questions.len(), 2);
+        state.finish(
+            Ok(Questions {
+                questions: vec![json!({"text":"how do you scale the  database?"})],
+            }),
+            "Them: question".into(),
+            true,
+        );
+        assert_eq!(state.view.questions.len(), 2);
+        assert_eq!(state.view.scan_notice, "Scan complete. No new suggestions.");
+    }
+    #[tokio::test]
     async fn generation_change_discards_response_even_without_polling_task() {
         let h = crate::meetings::service::tests::Harness::new();
         let service = service(&h);
@@ -508,7 +654,10 @@ mod tests {
         h.settings
             .lock()
             .unwrap()
-            .update(|s| s.question_analysis_interval = Some(1))
+            .update(|s| {
+                s.question_analysis_enabled = Some(true);
+                s.question_analysis_interval = Some(1);
+            })
             .unwrap();
         h.meeting.start(None).await.unwrap();
         h.capture.speech("Which database?", true, "user");
