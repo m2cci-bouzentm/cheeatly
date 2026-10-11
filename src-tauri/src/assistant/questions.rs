@@ -7,13 +7,14 @@ use crate::{
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
+    collections::HashSet,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio_util::sync::CancellationToken;
 
-// Text at least this similar to text already handled counts as the same: STT corrections, repeated
-// phrases and re-asked questions trigger no automatic LLM scan and add no duplicate suggestion.
+// Text at least this similar to text already scanned counts as the same: STT corrections, repeated
+// phrases and re-asked questions trigger no automatic LLM scan.
 const SIMILAR_TEXT_THRESHOLD: f64 = 0.9;
 
 #[derive(Clone, Default, Serialize)]
@@ -31,7 +32,7 @@ struct ScanState {
     view: QuestionSnapshot,
     generation: u64,
     cancellation: CancellationToken,
-    seen: Vec<String>,
+    seen: HashSet<String>,
     scanned_sentences: Vec<String>,
     last_attempt: Instant,
 }
@@ -41,7 +42,7 @@ impl Default for ScanState {
             view: Default::default(),
             generation: 0,
             cancellation: CancellationToken::new(),
-            seen: vec![],
+            seen: HashSet::new(),
             scanned_sentences: vec![],
             last_attempt: Instant::now(),
         }
@@ -81,11 +82,9 @@ impl ScanState {
                     let Some(text) = question.get("text").and_then(Value::as_str) else {
                         continue;
                     };
-                    let key = normalize(text);
-                    if key.is_empty() || self.seen.iter().any(|seen| is_similar(seen, &key)) {
+                    if text.trim().is_empty() || !self.seen.insert(text.trim().to_lowercase()) {
                         continue;
                     }
-                    self.seen.push(key);
                     question["id"] = json!(uuid::Uuid::new_v4().to_string());
                     question["timestamp"] = json!(
                         std::time::SystemTime::now()
@@ -603,31 +602,6 @@ mod tests {
             .await
             .unwrap();
         assert!(called, "text must be scanned again after a reset");
-    }
-    #[test]
-    fn near_duplicate_suggestions_are_dropped() {
-        let mut state = ScanState::default();
-        state.finish(
-            Ok(Questions {
-                questions: vec![
-                    json!({"text":"How do you scale the database?"}),
-                    json!({"text":"How do you scale the database"}),
-                    json!({"text":"How do you test the API?"}),
-                ],
-            }),
-            "Them: question".into(),
-            true,
-        );
-        assert_eq!(state.view.questions.len(), 2);
-        state.finish(
-            Ok(Questions {
-                questions: vec![json!({"text":"how do you scale the  database?"})],
-            }),
-            "Them: question".into(),
-            true,
-        );
-        assert_eq!(state.view.questions.len(), 2);
-        assert_eq!(state.view.scan_notice, "Scan complete. No new suggestions.");
     }
     #[tokio::test]
     async fn generation_change_discards_response_even_without_polling_task() {
