@@ -40,7 +40,6 @@ interface UseOverlayKeyboardParams {
   setStealthHotkeyConflict: React.Dispatch<React.SetStateAction<string | null>>;
   intelligence: IntelligenceKeyboardHandlers;
   currentModel: string;
-  onToast: (message: string) => void;
 }
 
 function clampScrollStep(
@@ -83,7 +82,6 @@ export const useOverlayKeyboard = ({
   setStealthHotkeyConflict,
   intelligence,
   currentModel,
-  onToast,
 }: UseOverlayKeyboardParams) => {
   const handlersRef = useRef({
     handleWhatToSay: intelligence.handleWhatToSay,
@@ -252,10 +250,7 @@ export const useOverlayKeyboard = ({
       setInputValue('');
     },
     takeScreenshot: async () => {
-      if (!modelSupportsVision(currentModel)) {
-        onToast('Screenshots require a vision-capable model');
-        return;
-      }
+      if (!modelSupportsVision(currentModel)) return;
       try {
         const data = await window.desktopAPI.takeScreenshot();
         if (data?.path)

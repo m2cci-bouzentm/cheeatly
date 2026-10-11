@@ -28,16 +28,12 @@ import TooltipLayer from './live/TooltipLayer.tsx';
 import { useMeetingClock } from './live/useMeetingClock.ts';
 import { useOverflowCue } from './live/useOverflowCue.ts';
 import { ANGLE_INSTRUCTION, SHORTER_INSTRUCTION, rewriteAnswer } from './live/rewriteAnswer.ts';
-import { formatShortcut, promptOf, requestLabel, scanResultMessage } from './live/format.ts';
+import { formatShortcut, promptOf, requestLabel } from './live/format.ts';
 
-type Toast = { text: string; id: number };
 // Channel mute states saved when capture is paused, restored on resume.
 type PausedChannels = { micMuted: boolean; systemMuted: boolean };
-type UserScan = { revision: number; ids: Set<string> };
-
 // Design maximum for the answer panel body (Chat and Transcript share it) and the suggestions list.
 const LIST_MAX_HEIGHT = 380;
-const TOAST_MS = 2600;
 // Room kept under an open menu so its 0 12px 30px shadow is not cut by the window edge.
 const MENU_SHADOW_ROOM = 42;
 const NO_VARIANT: AnswerVariant = { short: null, alt: null, showing: 'base', busy: false };
@@ -104,7 +100,7 @@ function contextFrom(messages: AppMessage[]): string {
     .join('\n');
 }
 
-const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSessionDiscarded }) => {
+const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting }) => {
   // State
   // Panels visible. Hide keeps the pill on screen; the global toggle (⌘B) still hides the whole window.
   const [isExpanded, setIsExpanded] = useState(true);
@@ -120,7 +116,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   const [stealthTapActive, setStealthTapActive] = useState(false);
   const [stealthPermissionMissing, setStealthPermissionMissing] = useState(false);
   const [stealthHotkeyConflict, setStealthHotkeyConflict] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
   const [variants, setVariants] = useState<Record<string, AnswerVariant>>({});
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [verticalCap, setVerticalCap] = useState(Infinity);
@@ -143,8 +138,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   const endingMeetingRef = useRef(false);
   const leavingRef = useRef(false);
   const resetQuestionsRef = useRef<() => void>(() => {});
-  const userScanRef = useRef<UserScan | null>(null);
-  const toastSeqRef = useRef(0);
   const submitRef = useRef<() => void>(() => {});
   const toggleHideRef = useRef<() => void>(() => {});
   const toggleCaptureRef = useRef<() => void>(() => {});
@@ -242,7 +235,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
     setStealthHotkeyConflict,
     intelligence: keyboardIntelligence,
     currentModel,
-    onToast: (text: string) => showToast(text),
   });
 
   // Derived values
@@ -277,12 +269,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
 
   // Effects
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), TOAST_MS);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
     window.desktopAPI.getDefaultModel().then(({ model }) => {
       setCurrentModel(model);
       window.desktopAPI.setModel(model);
@@ -303,10 +289,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   useEffect(() => {
     if (chatStatus === 'submitted') setAnnouncement('Preparing a response');
   }, [chatStatus]);
-
-  useEffect(() => {
-    if (chatError) showToast(chatError.message);
-  }, [chatError]);
 
   // A new request always shows in Chat.
   useEffect(() => {
@@ -419,19 +401,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
     if (isScanning) setAnnouncement('Scanning');
   }, [isScanning]);
 
-  // Result of a scan the user started: the first settled snapshot after it. Background scans stay silent.
-  useEffect(() => {
-    const scan = userScanRef.current;
-    if (!scan || isScanning || questionRevision <= scan.revision) return;
-    userScanRef.current = null;
-    if (scanError) return;
-    if (!questions.some((q) => !scan.ids.has(q.id))) showToast(scanResultMessage(scanNotice));
-  }, [questionRevision, isScanning, questions, scanError, scanNotice]);
-
-  useEffect(() => {
-    if (scanError) showToast(scanError);
-  }, [scanError]);
-
   useEffect(() => {
     if (newestQuestion) setAnnouncement(`New suggestion: ${promptOf(newestQuestion)}`);
   }, [newestQuestion]);
@@ -449,8 +418,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
       await window.desktopAPI.closeSettingsWindow();
       leavingRef.current = true;
       await window.desktopAPI.setWindowMode('launcher');
-      if (!save) onSessionDiscarded();
-    } catch (error) {
+      } catch (error) {
       leavingRef.current = false;
       setMeetingEndError(String(error));
     } finally {
@@ -462,14 +430,8 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   // The backend clears transcript, suggestions and the timer; capture keeps running.
   const resetSession = async () => {
     setPopup(null);
-    try {
-      await window.desktopAPI.resetMeeting();
-    } catch (error) {
-      showToast(String(error));
-      return;
-    }
+    await window.desktopAPI.resetMeeting();
     clearConversation();
-    showToast('Session reset');
   };
 
   const setChannelMuted = (channel: 'mic' | 'system', muted: boolean) => {
@@ -481,22 +443,16 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   const setUndetectable = async (on: boolean) => {
     await window.desktopAPI.setUndetectable(on);
     setIsUndetectable(on);
-    showToast(on ? 'Undetectable on' : 'Undetectable off');
   };
 
   const selectModel = async (id: string) => {
     await window.desktopAPI.setModel(id);
     setCurrentModel(id);
-    showToast(`Model: ${prettifyModelId(id)}`);
   };
 
   const attachScreenshot = async () => {
-    if (!modelSupportsVision(currentModel)) {
-      showToast('Screenshots require a vision-capable model');
-      return;
-    }
+    if (!modelSupportsVision(currentModel)) return;
     intelligence.handleScreenshotAttach(await window.desktopAPI.takeScreenshot());
-    showToast('Screenshot attached');
   };
 
   const rewrite = async (id: string, instruction: string, text: string, key: 'short' | 'alt') => {
@@ -506,28 +462,21 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
       updateVariant(id, { [key]: result, showing: key, busy: false });
     } catch (error) {
       updateVariant(id, { busy: false });
-      showToast(String(error));
+      throw error;
     }
   };
 
   // Event handlers
-  function showToast(text: string) {
-    toastSeqRef.current += 1;
-    setToast({ text, id: toastSeqRef.current });
-  }
-
   const toggleCapture = () => {
     if (pausedChannels) {
       setChannelMuted('mic', pausedChannels.micMuted);
       setChannelMuted('system', pausedChannels.systemMuted);
       setPausedChannels(null);
-      showToast('Capture resumed');
       return;
     }
     setPausedChannels({ micMuted: meeting.micMuted, systemMuted: meeting.systemMuted });
     setChannelMuted('mic', true);
     setChannelMuted('system', true);
-    showToast('Capture paused');
   };
   toggleCaptureRef.current = toggleCapture;
 
@@ -544,8 +493,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   const toggleHide = () => {
     setPopup(null);
     setIsExpanded((visible) => !visible);
-    if (!isExpanded) return;
-    showToast(capturing ? 'Hidden · still recording' : 'Hidden');
   };
   toggleHideRef.current = toggleHide;
 
@@ -563,20 +510,11 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   // Same switch as Settings: it is saved, so the next meeting starts the way the user left it.
   const toggleSuggestions = async () => {
     const enable = questionDetectionPaused;
-    try {
-      await window.desktopAPI.setQuestionAnalysisConfig({ enabled: enable });
-    } catch (error) {
-      showToast(String(error));
-      return;
-    }
+    await window.desktopAPI.setQuestionAnalysisConfig({ enabled: enable });
     if (enable && analysisPaused) setQuestionsPaused(false);
-    showToast(enable ? 'Suggestions on' : 'Suggestions off');
   };
 
-  const scanNow = () => {
-    userScanRef.current = { revision: questionRevision, ids: new Set(questions.map((q) => q.id)) };
-    forceRefresh();
-  };
+  const scanNow = () => forceRefresh();
 
   const sendSuggestion = (question: DetectedQuestion) => {
     if (isProcessing || endingMeeting) return;
@@ -591,20 +529,14 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
       intelligence.handleManualSubmit();
       return;
     }
-    if (!hasTranscript) {
-      showToast('Nothing to respond to yet');
-      return;
-    }
+    if (!hasTranscript) return;
     intelligence.handleWhatToSay();
   };
   submitRef.current = submit;
 
   const runQuickAction = (action: () => void) => {
     setPopup(null);
-    if (!hasTranscript) {
-      showToast('Nothing to respond to yet');
-      return;
-    }
+    if (!hasTranscript) return;
     action();
   };
 
@@ -626,13 +558,7 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
   };
 
   const copyAnswer = (text: string) => {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        analytics.trackCopyAnswer();
-        showToast('Copied');
-      },
-      () => showToast('Clipboard unavailable')
-    );
+    navigator.clipboard.writeText(text).then(() => analytics.trackCopyAnswer());
   };
 
   const openPermissionPane = (channel: 'mic' | 'system') => {
@@ -809,11 +735,6 @@ const AssistantOverlay: React.FC<AssistantOverlayProps> = ({ starting, onSession
         </div>
       )}
 
-      {toast && (
-        <div key={toast.id} className="toast" role="status">
-          {toast.text}
-        </div>
-      )}
       <div className="sr" role="status" aria-live="polite">
         {announcement}
       </div>

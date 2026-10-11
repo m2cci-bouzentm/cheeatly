@@ -43,10 +43,3 @@ export function promptOf(question: DetectedQuestion): string {
   if (question.speaker === 'Them') return `Help me answer: ${question.text}`;
   return `Follow up on: ${question.text}`;
 }
-
-// After a scan the user started: the backend's reason when it gives one ("Waiting for speech…"),
-// otherwise the design's "No new suggestions".
-export function scanResultMessage(notice: string): string {
-  if (notice && !notice.startsWith('Scan complete')) return notice;
-  return 'No new suggestions';
-}

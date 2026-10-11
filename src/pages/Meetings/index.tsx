@@ -29,7 +29,6 @@ const Meetings: React.FC<MeetingsProps> = ({
   const [isMeetingActive, setIsMeetingActive] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
 
   const fetchMeetings = () => {
     window.desktopAPI
@@ -42,11 +41,7 @@ const Meetings: React.FC<MeetingsProps> = ({
     setIsRefreshing(true);
     analytics.trackCommandExecuted('refresh_meetings');
     try {
-      setShowNotification(true);
       fetchMeetings();
-      setTimeout(() => {
-        setShowNotification(false);
-      }, 3000);
     } catch (e) {
       console.error('Refresh failed in handleRefresh:', e);
     } finally {
@@ -602,41 +597,6 @@ const Meetings: React.FC<MeetingsProps> = ({
         </AnimatePresence>
       </div>
 
-      <AnimatePresence>
-        {showNotification && (
-          <motion.div
-            initial={{ x: 300, opacity: 0, scale: 0.9 }}
-            animate={{ x: 0, opacity: 1, scale: 1 }}
-            exit={{ x: 300, opacity: 0, scale: 0.95 }}
-            transition={{
-              type: 'spring',
-              stiffness: 350,
-              damping: 30,
-              mass: 1,
-            }}
-            className={`fixed bottom-10 right-10 z-toast flex items-center gap-4 pl-4 pr-6 py-3.5 rounded-[18px] backdrop-blur-xl saturate-[180%] ring-1 ring-black/10 ${isLight ? 'bg-bg-elevated/90 border border-border-muted shadow-glass-lg' : 'bg-bg-elevated/40 border border-border-subtle shadow-glass-xl'}`}
-          >
-            <div className="relative flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-b from-blue-400/20 to-blue-600/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] border border-white/5">
-              <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-md" />
-              <RefreshCw
-                size={15}
-                className="text-blue-300 animate-[spin_2s_linear_infinite] drop-shadow-[0_0_5px_rgba(59,130,246,0.6)]"
-              />
-            </div>
-
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold text-text-primary leading-none tracking-tight">
-                Refreshed
-              </span>
-              <span className="text-sm text-text-tertiary font-medium leading-none tracking-wide">
-                Meetings updated
-              </span>
-            </div>
-
-            <div className="absolute inset-0 rounded-[18px] bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none" />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

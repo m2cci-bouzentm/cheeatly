@@ -21,7 +21,7 @@
   font-size: 16px;
   line-height: normal;
   width: 712px;
-  /* Room for the tooltips above the pill and under the composer, and for the toast:
+  /* Room for the tooltips above the pill and under the composer:
      the native window is exactly this box, so nothing can render outside it. */
   padding: 30px 0 46px;
 }
@@ -209,7 +209,6 @@
 .lc .row small { color: #8e9097; }
 
 /* Toast, finish and error cards */
-.lc .toast { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 20; background: #2c2c30; color: #e5e5ea; padding: 8px 13px; border: 1px solid #ffffff1c; border-radius: 8px; font-size: 12px; box-shadow: 0 5px 22px #0005; pointer-events: none; animation: lc-tip 0.15s both; white-space: nowrap; }
 .lc .finish { background: #28282cf7; border: 1px solid #ffffff15; border-radius: 16px; width: 340px; max-width: 100%; margin: 0 auto; padding: 20px; box-shadow: 0 15px 50px #0006; font-size: 13px; }
 .lc .finish h2 { font-size: 16px; font-weight: 550; margin: 0 0 6px; }
 .lc .finish p { color: #a9abb2; margin: 0 0 14px; line-height: 1.5; }

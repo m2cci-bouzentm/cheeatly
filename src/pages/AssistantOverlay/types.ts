@@ -40,7 +40,6 @@ export interface AssistantOverlayProps {
   overlayOpacity?: number;
   // Start is still waiting for the local speech engine to load.
   starting: boolean;
-  onSessionDiscarded: () => void;
 }
 
 export interface AttachmentContext {

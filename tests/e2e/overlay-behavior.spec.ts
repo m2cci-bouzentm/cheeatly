@@ -160,7 +160,7 @@ test('Session options stays embedded in the pill, selects a model, and dismisses
   await page
     .locator('.session-menu label', { hasText: 'Undetectable' })
     .click();
-  await expect(page.getByText('Undetectable on', { exact: true })).toBeVisible();
+  await expect(page.getByText('Undetectable on', { exact: true })).toHaveCount(0);
   await page.getByRole('heading', { name: 'Suggestions' }).click();
   await expect(more).toHaveAttribute('aria-expanded', 'false');
   expect(context.pages()).toHaveLength(1);
@@ -236,10 +236,7 @@ for (const [label, command] of [
       ['closeSettingsWindow'],
       ['setWindowMode', 'launcher'],
     ]);
-    if (label === 'Discard')
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Session discarded' })
-      ).toBeVisible();
+    await expect(page.getByText('Session discarded')).toHaveCount(0);
   });
 
   test(`${label} failure stays in overlay and permits retry`, async ({
@@ -282,16 +279,16 @@ for (const [label, command] of [
 
 // Scheduling, transcript windows, deduplication, retries and cancellation now live
 // in Rust QuestionService tests. Here we exercise the actual UI/IPC contract.
-test('manual scan displays backend empty-input notice', async ({ page }) => {
+test('manual scan calls the backend without a popup', async ({ page }) => {
   await openOverlay(page);
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
+  await expect.poll(() => scans(page)).toEqual(['scan']);
   await expect(
     page.getByText('Waiting for speech. Record a question, then scan again.')
-  ).toBeVisible();
-  expect(await scans(page)).toEqual(['scan']);
+  ).toHaveCount(0);
 });
 
-test('scan errors and subsequent suggestions are rendered from backend state', async ({
+test('scan errors show no popup and later suggestions render from backend state', async ({
   page,
 }) => {
   await openOverlay(page);
@@ -322,11 +319,12 @@ test('scan errors and subsequent suggestions are rendered from backend state', a
     };
   });
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
+  await expect.poll(() => scans(page)).toHaveLength(1);
   await expect(
     page.getByText(
       'Add an OpenRouter API key in Settings → AI Providers to detect questions.'
     )
-  ).toBeVisible();
+  ).toHaveCount(0);
   // A scan that finds something highlights the new card instead of showing a message (design).
   await page.getByRole('button', { name: 'Scan now', exact: true }).click();
   await expect(page.locator('.cue.fresh')).toHaveCount(1);
@@ -350,7 +348,6 @@ test('backend pending state disables scan and the switch saves the setting', asy
   ).toBeDisabled();
   const suggestions = page.getByRole('switch', { name: 'Automatic suggestions' });
   await suggestions.click();
-  await expect(page.getByText('Suggestions off', { exact: true })).toBeVisible();
   await expect(suggestions).not.toBeChecked();
   await suggestions.click();
   await expect(suggestions).toBeChecked();
@@ -374,7 +371,6 @@ test('suggestions off by default turn on from the overlay switch', async ({ page
   const suggestions = page.getByRole('switch', { name: 'Automatic suggestions' });
   await expect(suggestions).not.toBeChecked();
   await suggestions.click();
-  await expect(page.getByText('Suggestions on', { exact: true })).toBeVisible();
   await expect(suggestions).toBeChecked();
   await expect(page.getByText('Turn on suggestions in Settings')).toHaveCount(0);
   expect(
@@ -511,8 +507,8 @@ test('Reset session clears the conversation in one click and keeps the call runn
   await page.getByPlaceholder('Ask anything').fill('Draft that is about to go');
   await page.getByRole('button', { name: 'More session options' }).click();
   await page.getByRole('button', { name: 'Reset session', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Session reset' })).toBeVisible();
   await expect(page.getByPlaceholder('Ask anything')).toHaveValue('');
+  await expect(page.getByText('Session reset')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Reset session' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'End and save' })).toBeVisible();
   const calls = await page.evaluate(() => (window as any).behavior.calls);

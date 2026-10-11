@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider, ToastViewport } from './components/ui/toast';
 import AssistantOverlay from './pages/AssistantOverlay';
 import SettingsPopup from './pages/SettingsPopup';
 import Launcher from './pages/Launcher';
@@ -18,7 +17,6 @@ import { analytics } from './lib/analytics/analytics.service';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const queryClient = new QueryClient();
-const LAUNCHER_NOTICE_MS = 2600;
 
 const App: React.FC = () => {
   const [windowMode, setWindowMode] = useState(() => new URLSearchParams(window.location.search).get('window') || 'launcher');
@@ -123,12 +121,6 @@ const App: React.FC = () => {
   const [startError, setStartError] = useState('');
   // Start can wait on the local speech engine: the overlay opens at once and shows that it is loading.
   const [meetingStarting, setMeetingStarting] = useState(false);
-  const [launcherNotice, setLauncherNotice] = useState('');
-  useEffect(() => {
-    if (!launcherNotice) return;
-    const timer = setTimeout(() => setLauncherNotice(''), LAUNCHER_NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [launcherNotice]);
   const handleStartMeeting = async () => {
     setStartError('');
     setMeetingStarting(true);
@@ -160,10 +152,7 @@ const App: React.FC = () => {
       <ErrorBoundary context="SettingsPopup">
         <div className="h-full min-h-0 w-full">
           <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              <SettingsPopup />
-              <ToastViewport />
-            </ToastProvider>
+            <SettingsPopup />
           </QueryClientProvider>
         </div>
       </ErrorBoundary>
@@ -175,10 +164,7 @@ const App: React.FC = () => {
       <ErrorBoundary context="ModelSelector">
         <div className="h-full min-h-0 w-full overflow-hidden">
           <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              <ModelSelectorWindow />
-              <ToastViewport />
-            </ToastProvider>
+            <ModelSelectorWindow />
           </QueryClientProvider>
         </div>
       </ErrorBoundary>
@@ -190,25 +176,21 @@ const App: React.FC = () => {
       <ErrorBoundary context="Overlay">
         <div className="w-full h-full relative overflow-hidden bg-transparent">
           <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              <div
-                style={
-                  {
-                    ['--overlay-opacity' as '--overlay-opacity']:
-                      String(overlayOpacity),
-                    transition:
-                      'background-color 75ms ease, border-color 75ms ease, box-shadow 75ms ease',
-                  } as React.CSSProperties
-                }
-              >
-                <AssistantOverlay
-                  overlayOpacity={overlayOpacity}
-                  starting={meetingStarting}
-                  onSessionDiscarded={() => setLauncherNotice('Session discarded')}
-                />
-              </div>
-              <ToastViewport />
-            </ToastProvider>
+            <div
+              style={
+                {
+                  ['--overlay-opacity' as '--overlay-opacity']:
+                    String(overlayOpacity),
+                  transition:
+                    'background-color 75ms ease, border-color 75ms ease, box-shadow 75ms ease',
+                } as React.CSSProperties
+              }
+            >
+              <AssistantOverlay
+                overlayOpacity={overlayOpacity}
+                starting={meetingStarting}
+              />
+            </div>
           </QueryClientProvider>
         </div>
       </ErrorBoundary>
@@ -230,36 +212,24 @@ const App: React.FC = () => {
           }}
         >
           <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              {isSettingsOpen ? (
-                <SettingsPage
-                  onClose={() => setIsSettingsOpen(false)}
-                  initialTab={settingsInitialTab}
+            {isSettingsOpen ? (
+              <SettingsPage
+                onClose={() => setIsSettingsOpen(false)}
+                initialTab={settingsInitialTab}
+              />
+            ) : (
+              <div id="launcher-container" className="h-full w-full relative">
+                {startError && <div role="alert" className="px-4 py-2 text-sm text-red-400">{startError}</div>}
+                <Launcher
+                  onStartMeeting={handleStartMeeting}
+                  onOpenSettings={(tab = 'general') =>
+                    openSettingsExclusive(tab)
+                  }
                 />
-              ) : (
-                <div id="launcher-container" className="h-full w-full relative">
-                  {startError && <div role="alert" className="px-4 py-2 text-sm text-red-400">{startError}</div>}
-                  <Launcher
-                    onStartMeeting={handleStartMeeting}
-                    onOpenSettings={(tab = 'general') =>
-                      openSettingsExclusive(tab)
-                    }
-                  />
-                </div>
-              )}
-              <ToastViewport />
-            </ToastProvider>
+              </div>
+            )}
           </QueryClientProvider>
         </motion.div>
-
-        {launcherNotice && (
-          <div
-            role="status"
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] rounded-lg border border-white/10 bg-[#2c2c30] px-[13px] py-2 text-xs text-[#e5e5ea] shadow-lg pointer-events-none"
-          >
-            {launcherNotice}
-          </div>
-        )}
 
         <PermissionsToaster
           isOpen={showPermissionsToaster}
