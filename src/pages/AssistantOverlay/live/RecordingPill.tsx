@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { EyeIcon, EyeOffIcon, GripDots, LogoMark, PauseIcon, PlayIcon, StopIcon } from './icons.tsx';
 
 type RecordingPillProps = {
@@ -15,7 +15,7 @@ type RecordingPillProps = {
 };
 
 // The pill: always on screen during a call. Only the grip drags the window (design: "Drag to move").
-// End & save needs a second click within 3s. The Session options menu renders as its child.
+// The Session options menu renders as its child.
 const RecordingPill: React.FC<RecordingPillProps> = ({
   elapsed,
   capturing,
@@ -28,24 +28,6 @@ const RecordingPill: React.FC<RecordingPillProps> = ({
   onToggleMenu,
   children,
 }) => {
-  const [endArmed, setEndArmed] = useState(false);
-  const disarmRef = useRef<number | null>(null);
-
-  useEffect(() => () => {
-    if (disarmRef.current !== null) window.clearTimeout(disarmRef.current);
-  }, []);
-
-  const handleEnd = () => {
-    if (endArmed) {
-      if (disarmRef.current !== null) window.clearTimeout(disarmRef.current);
-      setEndArmed(false);
-      onEnd();
-      return;
-    }
-    setEndArmed(true);
-    disarmRef.current = window.setTimeout(() => setEndArmed(false), 3000);
-  };
-
   return (
     <div className="pill">
       <span
@@ -80,14 +62,13 @@ const RecordingPill: React.FC<RecordingPillProps> = ({
         {panelsHidden ? <EyeIcon /> : <EyeOffIcon />}
       </button>
       <button
-        className={endArmed ? 'ib stop confirm' : 'ib stop'}
-        onClick={handleEnd}
+        className="ib stop"
+        onClick={onEnd}
         disabled={ending}
         data-tip="End & save"
         aria-label={ending ? 'Stopping…' : 'End and save'}
       >
         <StopIcon />
-        {endArmed && 'End & save'}
       </button>
       <button
         className="more-btn"

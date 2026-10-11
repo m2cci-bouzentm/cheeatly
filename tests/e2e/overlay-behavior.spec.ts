@@ -173,7 +173,7 @@ test('Session options stays embedded in the pill, selects a model, and dismisses
   ).toBe(false);
 });
 
-// End & save needs two clicks (arm, confirm); Discard is one click in Session options (no confirm card).
+// End & save and Discard are one click each; a double click must still finish only once.
 async function startFinish(page: Page, label: string) {
   // Programmatic clicks (no mousedown) keep the call log to the meeting commands themselves.
   const click = (name: string) =>
@@ -181,8 +181,6 @@ async function startFinish(page: Page, label: string) {
       .getByRole('button', { name, exact: true })
       .evaluate((node: HTMLButtonElement) => node.click());
   if (label === 'End and save') {
-    await click('End and save');
-    await expect(page.getByText('End & save', { exact: true })).toBeVisible();
     await page
       .getByRole('button', { name: 'End and save' })
       .evaluate((node: HTMLButtonElement) => {

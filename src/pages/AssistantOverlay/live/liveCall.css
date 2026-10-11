@@ -54,7 +54,6 @@
 .lc .ib:hover,
 .lc .ib[aria-expanded='true'] { background: #ffffff10; color: #fff; }
 .lc .ib.stop { margin-left: 6px; }
-.lc .ib.stop.confirm { width: auto; padding: 0 11px; background: #673b40; color: #ffdbdc; font-size: 12px; gap: 6px; display: flex; align-items: center; }
 /* v1 KEEP: ··· button (v1 .pill button rules, scoped so the kept v2 pill buttons stay as they are) */
 .lc .pill .more-btn { border-radius: 20px; padding: 8px 10px; font-size: 11px; }
 .lc .pill .more-btn:hover { background: #ffffff0c; }
