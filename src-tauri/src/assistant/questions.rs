@@ -49,13 +49,17 @@ impl Default for ScanState {
     }
 }
 impl ScanState {
-    fn reset(&mut self) {
+    // Drops the scan in flight but keeps the meeting's suggestions and what was already scanned.
+    fn interrupt(&mut self) {
         self.cancellation.cancel();
         self.cancellation = CancellationToken::new();
-        self.view.questions.clear();
         self.view.is_scanning = false;
         self.view.scan_error.clear();
         self.view.scan_notice.clear();
+    }
+    fn reset(&mut self) {
+        self.interrupt();
+        self.view.questions.clear();
         self.scanned_sentences.clear();
         self.seen.clear();
         self.last_attempt = Instant::now();
@@ -190,10 +194,13 @@ impl QuestionService {
             .question_analysis_enabled();
         let mut state = self.state.lock().map_err(|e| e.to_string())?;
         if state.generation != meeting.generation || state.view.settings_enabled != enabled {
+            // A new meeting starts empty; turning suggestions off and on keeps this meeting's ones.
             if state.generation != meeting.generation {
                 state.view.is_paused = false;
+                state.reset();
+            } else {
+                state.interrupt();
             }
-            state.reset();
             state.generation = meeting.generation;
             state.view.settings_enabled = enabled;
             self.publish(&mut state);
@@ -208,7 +215,7 @@ impl QuestionService {
     pub fn set_paused(&self, paused: bool) -> Result<QuestionSnapshot, String> {
         let mut state = self.state.lock().map_err(|e| e.to_string())?;
         if state.view.is_paused != paused {
-            state.reset();
+            state.interrupt();
             state.view.is_paused = paused;
         }
         Ok(self.publish(&mut state))
@@ -431,7 +438,7 @@ mod tests {
         assert!(service.snapshot().unwrap().questions.is_empty());
     }
     #[tokio::test]
-    async fn pending_scan_single_flight_pause_cancellation_and_settings_reset() {
+    async fn pending_scan_single_flight_pause_cancellation_and_toggle_keeps_suggestions() {
         let h = crate::meetings::service::tests::Harness::new();
         h.settings
             .lock()
@@ -484,6 +491,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(service.snapshot().unwrap().questions.len(), 1);
+        service.set_paused(true).unwrap();
+        assert_eq!(service.set_paused(false).unwrap().questions.len(), 1);
         h.settings
             .lock()
             .unwrap()
@@ -491,7 +500,7 @@ mod tests {
             .unwrap();
         let view = service.snapshot().unwrap();
         assert!(!view.settings_enabled);
-        assert!(view.questions.is_empty());
+        assert_eq!(view.questions.len(), 1);
         let manual = service
             .scan_with(true, |_| async {
                 Ok(Questions {
@@ -500,7 +509,7 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(manual.questions.len(), 1);
+        assert_eq!(manual.questions.len(), 2);
 
         service
             .scan_with(false, |_| async {
@@ -508,6 +517,17 @@ mod tests {
             })
             .await
             .unwrap();
+        h.settings
+            .lock()
+            .unwrap()
+            .update(|s| s.question_analysis_enabled = Some(true))
+            .unwrap();
+        let view = service.snapshot().unwrap();
+        assert!(view.settings_enabled);
+        assert_eq!(view.questions.len(), 2);
+        h.meeting.discard().await.unwrap();
+        h.meeting.start(None).await.unwrap();
+        assert!(service.snapshot().unwrap().questions.is_empty());
     }
     #[tokio::test]
     async fn automatic_scans_are_off_by_default() {
